@@ -338,10 +338,10 @@ const AboutSection = () => (
         </div>
         <div className="relative">
           <div className="aspect-square bg-gradient-to-br from-slate-200 to-slate-100 rounded-2xl overflow-hidden">
-            <img
-            src="/src/assets/gua.jpeg"
-              alt="Professional headshot"
-              className="w-full h-full object-cover"
+                <img
+            src="/assets/gua.jpeg"
+            alt="Professional headshot"
+            className="w-full h-full object-cover"
             />
           </div>
           <div className="absolute -bottom-6 -left-6 bg-emerald-500 text-white p-6 rounded-xl shadow-xl">
