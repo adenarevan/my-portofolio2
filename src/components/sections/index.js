@@ -1,0 +1,9 @@
+// Export all section components
+export { default as HeroSection } from './HeroSection';
+export { default as AboutSection } from './AboutSection';
+export { default as ServicesSection } from './ServicesSection';
+export { default as PortfolioSection } from './PortfolioSection';
+export { default as WhyChooseMeSection } from './WhyChooseMeSection';
+export { default as TestimonialsSection } from './TestimonialsSection';
+export { default as CTASection } from './CTASection';
+export { default as ContactSection } from './ContactSection';
