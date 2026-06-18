@@ -9,6 +9,7 @@ import WhyChooseMeSection from './sections/WhyChooseMeSection';
 import TestimonialsSection from './sections/TestimonialsSection';
 import CTASection from './sections/CTASection';
 import ContactSection from './sections/ContactSection';
+import ScrollToTop from './ScrollToTop';
 
 // Main Landing Page Component
 const LandingPage = () => {
@@ -24,6 +25,7 @@ const LandingPage = () => {
       <CTASection />
       <ContactSection />
       <Footer />
+      <ScrollToTop />
     </div>
   );
 };

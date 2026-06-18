@@ -49,9 +49,8 @@ const PortfolioSection = () => {
   return (
     <section ref={sectionRef} id="portfolio" className="py-20 lg:py-32 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className={`text-center max-w-2xl mx-auto mb-16 transition-all duration-700 ${
-          isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-        }`}>
+        <div className={`text-center max-w-2xl mx-auto mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+          }`}>
           <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">
             {t.title}
           </h2>
@@ -64,10 +63,9 @@ const PortfolioSection = () => {
           {projects.map((project, index) => (
             <div
               key={index}
-              className={`group bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-xl transition-all duration-500 ${
-                isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-              }`}
-              style={{ 
+              className={`group bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-xl transition-all duration-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+                }`}
+              style={{
                 transitionDelay: `${index * 200}ms`,
                 animationDelay: `${index * 200}ms`
               }}
@@ -97,7 +95,9 @@ const PortfolioSection = () => {
                   ))}
                 </div>
                 <a
-                  href="#"
+                  href="https://github.com/adenarevan"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 text-emerald-600 font-medium hover:text-emerald-700 transition-colors group-hover:gap-3"
                 >
                   {t.viewProject} <ExternalLinkIcon />

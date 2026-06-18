@@ -54,9 +54,10 @@ export const translations = {
       hireMe: 'Hire Me'
     },
     hero: {
-      subtitle: 'Software Engineer & Web Developer',
-      title: 'Building reliable, scalable, and modern web applications',
-      description: 'I help businesses and institutions transform their ideas into production-ready software solutions. From concept to deployment, I deliver clean, maintainable code that scales.',
+      nameLine1: 'ADENA',
+      nameLine2: 'REIS VANRIKA',
+      subtitle: 'Software Engineer',
+      tagline: 'Developing Scalable Infrastructure Monitoring and Public Service Platforms',
       viewPortfolio: 'View Portfolio',
       hireMe: 'Hire Me'
     },
@@ -81,12 +82,16 @@ export const translations = {
     },
     contact: {
       title: 'Get In Touch',
-      form: {
-        name: 'Your Name',
-        email: 'Email Address',
-        message: 'Message',
-        submit: 'Send Message'
-      }
+      subtitle: "Have a question or want to work together? Leave your details and I'll get back to you as soon as possible.",
+      email: 'Email',
+      sendMessage: 'Send Message',
+      yourName: 'Your Name',
+      namePlaceholder: 'John Doe',
+      emailAddress: 'Email Address',
+      emailPlaceholder: 'john@example.com',
+      message: 'Message',
+      messagePlaceholder: 'How can I help you?',
+      sendButton: 'Send Message'
     }
   },
   id: {
@@ -144,9 +149,10 @@ export const translations = {
       hireMe: 'Rekrut Saya'
     },
     hero: {
-      subtitle: 'Software Engineer & Web Developer',
-      title: 'Membangun aplikasi web yang andal, skalabel, dan modern',
-      description: 'Saya membantu bisnis dan institusi mengubah ide mereka menjadi solusi perangkat lunak yang siap produksi. Dari konsep hingga deployment, saya menghasilkan kode yang bersih dan mudah di-maintain.',
+      nameLine1: 'ADENA',
+      nameLine2: 'REIS VANRIKA',
+      subtitle: 'Software Engineer',
+      tagline: 'Mengembangkan Platform Pemantauan Infrastruktur dan Pelayanan Publik yang Skalabel',
       viewPortfolio: 'Lihat Portfolio',
       hireMe: 'Rekrut Saya'
     },
@@ -171,12 +177,16 @@ export const translations = {
     },
     contact: {
       title: 'Hubungi Saya',
-      form: {
-        name: 'Nama Anda',
-        email: 'Alamat Email',
-        message: 'Pesan',
-        submit: 'Kirim Pesan'
-      }
+      subtitle: 'Punya pertanyaan atau ingin bekerja sama? Tinggalkan pesan dan saya akan segera membalasnya.',
+      email: 'Email',
+      sendMessage: 'Kirim Pesan',
+      yourName: 'Nama Anda',
+      namePlaceholder: 'Budi Santoso',
+      emailAddress: 'Alamat Email',
+      emailPlaceholder: 'budi@example.com',
+      message: 'Pesan',
+      messagePlaceholder: 'Ada yang bisa saya bantu?',
+      sendButton: 'Kirim Pesan'
     }
   }
 };
