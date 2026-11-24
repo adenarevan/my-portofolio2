@@ -14,7 +14,10 @@ function useLanguage() {
 
 // Language Provider Component
 function LanguageProvider({ children }) {
-  const [language, setLanguage] = useState('en'); // 'en' or 'id'
+  const [language, setLanguage] = useState(() => {
+    try { return localStorage.getItem('portfolio-language') === 'en' ? 'en' : 'id'; }
+    catch { return 'id'; }
+  });
 
   const toggleLanguage = () => {
     setLanguage(prev => prev === 'en' ? 'id' : 'en');
