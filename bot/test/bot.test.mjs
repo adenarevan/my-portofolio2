@@ -96,6 +96,20 @@ test('AI contract uses server-only structured responses and rejects fabricated s
   await assert.rejects(writeArticle(candidate, sourceItems, { apiKey: 'test', fetchImpl: async () => new Response('no', { status: 429 }) }), /HTTP 429/);
 });
 
+test('Temporary Gemini failures retry with bounded backoff; quota errors never loop', async () => {
+  let calls = 0; const waits = [];
+  const result = await writeArticle(candidate, sourceItems, { apiKey: 'test', wait: async ms => waits.push(ms), fetchImpl: async () => {
+    calls++;
+    return calls < 3 ? new Response('unavailable', { status: 503 }) : new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(article) }] } }] }));
+  } });
+  assert.deepEqual(result, article); assert.equal(calls, 3); assert.deepEqual(waits, [1000, 2000]);
+  calls = 0;
+  await assert.rejects(writeArticle(candidate, sourceItems, { apiKey: 'test', wait: async () => {}, fetchImpl: async () => { calls++; return new Response('unavailable', { status: 503 }); } }), /503.*3 kali/);
+  assert.equal(calls, 3); calls = 0;
+  await assert.rejects(writeArticle(candidate, sourceItems, { apiKey: 'test', wait: async () => { throw Error('must not wait'); }, fetchImpl: async () => { calls++; return new Response('quota', { status: 429 }); } }), /429/);
+  assert.equal(calls, 1);
+});
+
 const emulator = Boolean(process.env.FIRESTORE_EMULATOR_HOST);
 const testProject = 'demo-portfolio-bot-tests';
 let environment, db, adminDb;

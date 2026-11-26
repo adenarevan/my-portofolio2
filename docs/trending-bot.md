@@ -89,6 +89,8 @@ Indonesia berarti liputan dari penerbit Indonesia, bukan pengukuran lokasi pemba
 
 Gemini menghasilkan JSON yang diperiksa struktur, panjang, slug dan ID sumbernya. Server menyisipkan tautan yang benar-benar diambil, bukan URL buatan AI. Instruksi di dalam sumber diperlakukan sebagai data tidak tepercaya. Validasi tautan/struktur tidak menjamin setiap klaim faktual: admin tetap meninjau draf.
 
+Gangguan sementara Gemini HTTP 500/502/503/504 dicoba paling banyak tiga kali per permintaan penulisan, dengan jeda 1 lalu 2 detik. HTTP 429, autentikasi dan hasil yang tidak valid tidak diputar ulang otomatis. Ini tidak menggandakan penyimpanan draf; transaksi dan ID topik tetap menjadi penjaga deduplikasi.
+
 Riwayat topik/URL permanen, ID artikel deterministik, lease global, dan transaksi atomik mencegah pengulangan serta konflik manual/jadwal. Jika proses berhenti setelah draf committed, retry mempertahankan draf itu. Kemiripan judul adalah heuristik; kejadian dengan judul sangat berbeda tetap perlu ditinjau. Arsip blog/riwayat dibaca bertahap 200 dokumen, sehingga penggunaan Firestore bertambah mengikuti arsip.
 
 Field artikel lama tetap dipakai, dengan tambahan opsional `slug`, `metaDescription`, `sources`, dan `bot`. Isi tetap `tiptap:v1:`. Collection bot: `portfolioBotSettings`, `portfolioBotRequests`, `portfolioBotRuns`, `portfolioBotLocks`, `portfolioBotTopics`, `portfolioBotStatus`, `portfolioBotWorkers`.
