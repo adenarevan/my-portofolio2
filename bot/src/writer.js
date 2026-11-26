@@ -1,4 +1,5 @@
 import { BOT_CATEGORIES } from './botConfig.js';
+import { defaultArticleImage, normalizeArticleImage } from '../../src/lib/articleMedia.js';
 
 const string = { type: 'string' };
 export function articleSchema(ids) {
@@ -61,11 +62,11 @@ export function articleToPost(article, sources, category) {
   const used = new Set(article.sections.flatMap(section => section.sourceIds));
   const references = sources.filter(source => used.has(source.id));
   const link = source => ({ type: 'text', text: `${source.sourceName}: ${source.title}`, marks: [{ type: 'link', attrs: { href: source.url } }] });
-  const content = article.sections.flatMap(section => [
+  const content = [{ type: 'image', attrs: normalizeArticleImage(defaultArticleImage({ title: article.title, excerpt: article.excerpt, tag: category })) }, ...article.sections.flatMap(section => [
     { type: 'heading', attrs: { level: 2 }, content: [textNode(section.heading)] },
     ...section.paragraphs.map(paragraph),
     { type: 'paragraph', content: [textNode('Rujukan: '), ...section.sourceIds.flatMap((id, index) => { const source = sources.find(source => source.id === id); return [...(index ? [textNode(', ')] : []), { type: 'text', text: source.sourceName, marks: [{ type: 'link', attrs: { href: source.url } }] }]; })] },
-  ]);
+  ])];
   content.push({ type: 'heading', attrs: { level: 2 }, content: [textNode('Sumber')] }, { type: 'bulletList', content: references.map(source => ({ type: 'listItem', content: [{ type: 'paragraph', content: [link(source)] }] })) });
   const body = `tiptap:v1:${JSON.stringify({ type: 'doc', content })}`;
   if (body.length > 50000) throw new Error('Artikel AI melebihi batas editor.');

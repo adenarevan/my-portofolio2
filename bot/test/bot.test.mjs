@@ -93,6 +93,8 @@ test('AI contract uses server-only structured responses and rejects fabricated s
   assert.throws(() => validateArticle({ ...article, sections: [{ ...article.sections[0], paragraphs: ['Claim https://invented.example.org/ with a made-up link.'] }, article.sections[1]] }, sourceItems));
   const post = articleToPost(article, sourceItems, 'ai');
   assert.equal(post.status, 'draft'); assert.equal(post.publishedAt, null); assert.match(post.body, /^tiptap:v1:/); assert.equal(post.sources.length, 2);
+  const image = JSON.parse(post.body.slice('tiptap:v1:'.length)).content[0];
+  assert.equal(image.type, 'image'); assert.equal(image.attrs.src, '/blog-media/computing.jpg'); assert.ok(image.attrs.alt); assert.ok(image.attrs.creditUrl.startsWith('https://commons.wikimedia.org/'));
   await assert.rejects(writeArticle(candidate, sourceItems, { apiKey: 'test', fetchImpl: async () => new Response('no', { status: 429 }) }), /HTTP 429/);
 });
 

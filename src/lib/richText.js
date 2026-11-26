@@ -1,4 +1,5 @@
 // Versioned JSON stays in the existing Firestore `body` string. Old text remains readable.
+import { normalizeArticleImage } from './articleMedia.js';
 export const RICH_TEXT_PREFIX = 'tiptap:v1:';
 export const FONT_SIZES = ['12px', '14px', '16px', '18px', '20px', '24px', '28px', '32px', '40px', '48px'];
 export const TEXT_ALIGNMENTS = ['left', 'center', 'right', 'justify'];
@@ -27,6 +28,10 @@ function cleanMark(mark) {
 
 function cleanNode(node, depth = 0) {
   if (!node || typeof node !== 'object' || depth > 32) return null;
+  if (node.type === 'image') {
+    const attrs = normalizeArticleImage(node.attrs);
+    return attrs ? { type: 'image', attrs } : null;
+  }
   if (node.type === 'text' && typeof node.text === 'string' && node.text) {
     const marks = Array.isArray(node.marks) ? node.marks.map(cleanMark).filter(Boolean) : [];
     return { type: 'text', text: node.text, ...(marks.length ? { marks } : {}) };
@@ -69,7 +74,8 @@ function nodeText(node) {
 
 export function serializeBody(document) {
   const cleaned = cleanNode(document);
-  return cleaned?.type === 'doc' && nodeText(cleaned).trim() ? RICH_TEXT_PREFIX + JSON.stringify(cleaned) : '';
+  const hasImage = node => node.type === 'image' || (node.content || []).some(hasImage);
+  return cleaned?.type === 'doc' && (nodeText(cleaned).trim() || hasImage(cleaned)) ? RICH_TEXT_PREFIX + JSON.stringify(cleaned) : '';
 }
 
 export function bodyText(body = '') {

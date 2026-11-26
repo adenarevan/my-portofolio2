@@ -1,5 +1,7 @@
 export const blogCopy = {
   id: {
+    imageChoices: { orbit: 'Orbit & antariksa', computing: 'Teknologi & komputasi', workspace: 'Karier & catatan' },
+    image: 'Gambar', imageUrl: 'URL gambar (HTTPS)', imageAlt: 'Deskripsi gambar (alt text)', imageCaption: 'Keterangan gambar', imageCredit: 'Kredit foto', imageCreditUrl: 'Tautan sumber foto', imagePosition: 'Posisi gambar', imageCover: 'Sampul, di awal tulisan', imageInline: 'Di posisi kursor', imageApply: 'Sisipkan gambar', imageInvalid: 'Gunakan URL gambar HTTPS yang valid dan isi deskripsi gambarnya.', imageGallery: 'Ilustrasi bawaan', imageHelp: 'Gunakan foto milik sendiri atau gambar yang diizinkan untuk dipakai. Kredit dan keterangan ikut tampil pada artikel.',
     seo: 'Detail artikel & SEO (opsional)', metaDescription: 'Meta description', invalidSlug: 'Slug hanya boleh memakai huruf kecil, angka, dan tanda hubung.', botSources: 'Sumber dan alasan pemilihan bot', botReview: 'Tinjau sumber dan klaim faktual sebelum menerbitkan draf AI.',
     home: 'Portofolio', blog: 'Blog', login: 'Login', admin: 'Editor blog', logout: 'Keluar',
     title: 'Catatan & tulisan', intro: 'Tentang pengembangan web, hal yang saya pelajari, dan proses di balik proyek.', all: 'Semua tulisan',
@@ -14,6 +16,8 @@ export const blogCopy = {
     discard: 'Perubahan belum disimpan. Tinggalkan perubahan ini?', deleteConfirm: 'Hapus tulisan ini secara permanen?', unpublishConfirm: 'Tarik tulisan ini dari blog publik dan simpan sebagai draf?', invalid: 'Isi judul dan tulisan terlebih dahulu.', saveFailed: 'Tulisan belum tersimpan. Isi editor tetap ada; coba lagi.', offline: 'Anda sedang offline. Sambungkan internet sebelum menyimpan.', conflict: 'Tulisan telah berubah di sesi lain. Salin tulisan Anda sebelum memuat ulang versi terbaru.', missing: 'Tulisan ini sudah dihapus di sesi lain. Salin isinya ke tulisan baru.', accessLost: 'Akses menulis ditolak. Periksa akun dan izin editor Anda.', chars: 'karakter', optional: 'opsional',
   },
   en: {
+    imageChoices: { orbit: 'Orbit & space', computing: 'Technology & computing', workspace: 'Work & notes' },
+    image: 'Image', imageUrl: 'Image URL (HTTPS)', imageAlt: 'Image description (alt text)', imageCaption: 'Caption', imageCredit: 'Photo credit', imageCreditUrl: 'Photo source link', imagePosition: 'Image position', imageCover: 'Cover, at the start', imageInline: 'At the cursor', imageApply: 'Insert image', imageInvalid: 'Use a valid HTTPS image URL and add an image description.', imageGallery: 'Built-in imagery', imageHelp: 'Use your own photos or images you have permission to use. Credits and captions appear with the article.',
     seo: 'Article details & SEO (optional)', metaDescription: 'Meta description', invalidSlug: 'Use only lowercase letters, numbers, and hyphens in the slug.', botSources: 'Bot sources and selection reason', botReview: 'Review sources and factual claims before publishing an AI draft.',
     home: 'Portfolio', blog: 'Blog', login: 'Login', admin: 'Blog editor', logout: 'Sign out',
     title: 'Notes & writing', intro: 'On web development, things I learn, and the process behind my projects.', all: 'All writing',

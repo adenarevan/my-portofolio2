@@ -5,16 +5,24 @@ import StarterKit from '@tiptap/starter-kit';
 import { FontSize, TextStyle } from '@tiptap/extension-text-style';
 import TextAlign from '@tiptap/extension-text-align';
 import { bodyToDocument, FONT_SIZES, safeLink, serializeBody } from '../../lib/richText';
+import { ARTICLE_IMAGES, normalizeArticleImage } from '../../lib/articleMedia';
+import { coverIndex } from '../../lib/articleReading';
+import { ArticleImageNode } from './ArticleImageNode';
 
 export default function RichTextEditor({ value, onChange, disabled, t }) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [url, setUrl] = useState('');
   const [linkError, setLinkError] = useState(false);
   const linkInput = useRef(null);
+  const [imageOpen, setImageOpen] = useState(false);
+  const [imageForm, setImageForm] = useState({ src: '', alt: '', caption: '', credit: '', creditUrl: '' });
+  const [imagePosition, setImagePosition] = useState('cover');
+  const [imageError, setImageError] = useState(false);
+  const imageInput = useRef(null);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3, 4] }, trailingNode: false, link: { openOnClick: false, defaultProtocol: 'https', isAllowedUri: url => Boolean(safeLink(url)) } }),
-      TextStyle, FontSize, TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextStyle, FontSize, TextAlign.configure({ types: ['heading', 'paragraph'] }), ArticleImageNode,
     ],
     content: bodyToDocument(value),
     editable: !disabled,
@@ -34,11 +42,24 @@ export default function RichTextEditor({ value, onChange, disabled, t }) {
     if (editor && serializeBody(editor.getJSON()) !== value) editor.commands.setContent(bodyToDocument(value), { emitUpdate: false });
   }, [editor, value]);
   useEffect(() => { if (linkOpen) linkInput.current?.focus(); }, [linkOpen]);
+  useEffect(() => { if (imageOpen) imageInput.current?.focus(); }, [imageOpen]);
   if (!editor || !state) return null;
 
   const button = (name, label, content, command, active = state[name], unavailable = false) => <button key={name} type="button" title={label} aria-label={label} aria-pressed={typeof active === 'boolean' ? active : undefined} disabled={disabled || unavailable} onMouseDown={event => event.preventDefault()} onClick={command}>{content}</button>;
   function openLink() {
-    setUrl(editor.getAttributes('link').href || ''); setLinkError(false); setLinkOpen(open => !open);
+    setUrl(editor.getAttributes('link').href || ''); setLinkError(false); setImageOpen(false); setLinkOpen(open => !open);
+  }
+  function applyImage(event) {
+    event.preventDefault();
+    const image = normalizeArticleImage(imageForm);
+    if (!image || !image.alt) { setImageError(true); return; }
+    const node = { type: 'image', attrs: image };
+    if (imagePosition === 'cover') {
+      const document = editor.getJSON(); const index = coverIndex(document);
+      const content = document.content.filter((_, position) => position !== index);
+      editor.chain().setContent({ type: 'doc', content: [node, ...content] }, { emitUpdate: true }).focus('end').run();
+    } else editor.chain().focus().insertContent(node).run();
+    setImageOpen(false); setImageError(false);
   }
   function applyLink(event) {
     event.preventDefault();
@@ -71,6 +92,7 @@ export default function RichTextEditor({ value, onChange, disabled, t }) {
       </div>
       <div className="rich-tool-group">
         {button('link', t.link, t.link, openLink)}
+        {button('image', t.image, t.image, () => { setLinkOpen(false); setImageError(false); setImageOpen(open => !open); }, imageOpen)}
         {button('clear', t.clearFormatting, 'Tx', () => editor.chain().focus().unsetAllMarks().clearNodes().unsetTextAlign().run(), null)}
         {button('undo', t.undo, '↶', () => editor.chain().focus().undo().run(), null, !state.undo)}
         {button('redo', t.redo, '↷', () => editor.chain().focus().redo().run(), null, !state.redo)}
@@ -80,6 +102,18 @@ export default function RichTextEditor({ value, onChange, disabled, t }) {
       <label htmlFor="post-link">{t.linkAddress}</label>
       <div><input ref={linkInput} id="post-link" value={url} onChange={event => { setUrl(event.target.value); setLinkError(false); }} placeholder="https://github.com/adenarevan" maxLength={2048} required disabled={disabled} aria-invalid={linkError || undefined} aria-describedby={linkError ? 'post-link-error' : undefined} onKeyDown={event => { if (event.key === 'Escape') { setLinkOpen(false); editor.commands.focus(); } }} /><button type="submit" disabled={disabled}>{t.applyLink}</button>{state.link && <button type="button" disabled={disabled} onClick={() => { editor.chain().focus().extendMarkRange('link').unsetLink().run(); setLinkOpen(false); }}>{t.removeLink}</button>}<button type="button" onClick={() => { setLinkOpen(false); editor.commands.focus(); }}>{t.cancel}</button></div>
       {linkError && <p id="post-link-error" role="alert">{t.invalidLink}</p>}
+    </form>}
+    {imageOpen && <form className="rich-image-form" onSubmit={applyImage}>
+      <fieldset disabled={disabled}><legend>{t.image}</legend><p className="editor-help">{t.imageHelp}</p>
+      <div className="rich-image-gallery" role="group" aria-label={t.imageGallery}>{ARTICLE_IMAGES.map(image => <button type="button" key={image.id} onClick={() => { setImageForm(image); setImageError(false); }}><img src={image.src} alt="" width="160" height="100" loading="lazy" /><span>{t.imageChoices[image.id] || image.label}</span></button>)}</div>
+      <label htmlFor="post-image-url">{t.imageUrl}</label><input ref={imageInput} id="post-image-url" value={imageForm.src} onChange={event => setImageForm(current => ARTICLE_IMAGES.some(image => image.src === current.src) ? { src: event.target.value, alt: '', caption: '', credit: '', creditUrl: '' } : { ...current, src: event.target.value })} required maxLength={2048} placeholder="https://…" aria-invalid={imageError || undefined} aria-describedby={imageError ? 'post-image-error' : undefined} />
+      <label htmlFor="post-image-alt">{t.imageAlt}</label><input id="post-image-alt" value={imageForm.alt} onChange={event => setImageForm(current => ({ ...current, alt: event.target.value }))} required maxLength={240} />
+      <label htmlFor="post-image-caption">{t.imageCaption}</label><input id="post-image-caption" value={imageForm.caption} onChange={event => setImageForm(current => ({ ...current, caption: event.target.value }))} maxLength={300} />
+      <div className="editor-field-pair"><div><label htmlFor="post-image-credit">{t.imageCredit}</label><input id="post-image-credit" value={imageForm.credit} onChange={event => setImageForm(current => ({ ...current, credit: event.target.value }))} maxLength={180} /></div><div><label htmlFor="post-image-source">{t.imageCreditUrl}</label><input id="post-image-source" value={imageForm.creditUrl} onChange={event => setImageForm(current => ({ ...current, creditUrl: event.target.value }))} maxLength={2048} /></div></div>
+      <label htmlFor="post-image-position">{t.imagePosition}</label><select id="post-image-position" value={imagePosition} onChange={event => setImagePosition(event.target.value)}><option value="cover">{t.imageCover}</option><option value="inline">{t.imageInline}</option></select>
+      {imageError && <p id="post-image-error" className="editor-message is-error" role="alert">{t.imageInvalid}</p>}
+      <div className="rich-image-actions"><button className="blog-secondary" type="submit">{t.imageApply}</button><button type="button" className="text-link" onClick={() => setImageOpen(false)}>{t.cancel}</button></div>
+      </fieldset>
     </form>}
     <EditorContent editor={editor} />
   </div>;
