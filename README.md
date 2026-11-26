@@ -67,12 +67,16 @@ Data tersimpan di Cloud Firestore, bukan local storage. Local storage hanya dipa
 
 ### Menghubungkan project Firebase
 
-1. Salin `.env.example` menjadi `.env.local`, kemudian isi empat nilai konfigurasi Web App dari **Project settings → General → Your apps → Config**. Nilai ini adalah konfigurasi publik Web App; jangan menaruh service account, private key, atau password admin ke variabel `VITE_`.
+Deploy portfolio ini memakai konfigurasi Web App publik ADENA di `src/lib/firebaseConfig.js` sebagai bawaan. Vercel tetap bisa membuka blog/login tanpa `.env.local`, yang memang diabaikan Git. Browser key telah diperiksa terbatas ke API Firebase; key Gemini dan token GitHub tetap server-only. Lihat [penjelasan resmi Firebase tentang Web App API keys](https://firebase.google.com/docs/projects/api-keys).
+
+Untuk menggunakan project Firebase lain:
+
+1. Salin `.env.example` menjadi `.env.local`, kemudian isi **keempat** nilai konfigurasi Web App dari **Project settings → General → Your apps → Config**. Nilai ini adalah konfigurasi publik Web App; jangan menaruh service account, private key, atau password admin ke variabel `VITE_`. Override project lain yang hanya terisi sebagian tidak dicampur dengan konfigurasi ADENA. Mode emulator juga memerlukan konfigurasi demo lengkap.
 2. Aktifkan **Authentication → Sign-in method → Email/Password**. Buat akun penulis di **Authentication → Users**, atau gunakan akun yang sudah ada. Password dimasukkan langsung di Firebase Console atau diatur melalui alur reset password; jangan commit password.
 3. Salin **UID** akun penulis. Di Firestore, buat collection `portfolioBlogAdmins`, dengan document ID sama persis dengan UID tersebut dan field `enabled` bertipe **boolean** bernilai **true**. Akses editor ditentukan oleh dokumen ini di Security Rules, bukan oleh email yang tertulis di frontend. Dokumen akses tidak bisa dibuat atau diubah melalui website.
 4. Terapkan aturan di `firestore.rules`. **Jika memakai project ADENA yang juga dipakai BTC, gabungkan fungsi dan dua blok collection blog ke rules yang sudah ada. Jangan mengganti seluruh rules project atau mengubah collection BTC.** Pastikan tidak ada aturan wildcard yang memberi akses luas ke collection blog; aturan Firestore yang cocok digabung dengan logika OR. Review rules project aktif sebelum deployment.
 5. Tambahkan composite index dari `firestore.indexes.json`: collection `portfolioPosts`, field `status` ascending dan `publishedAt` descending, scope Collection. Tunggu index siap.
-6. Tambahkan domain portofolio dan `localhost` ke **Authentication → Settings → Authorized domains** sesuai kebutuhan. Isi empat variabel Firebase yang sama di environment Vercel, kemudian build/deploy ulang. `vercel.json` mendukung akses langsung ke URL Blog, Login, dan Editor.
+6. Tambahkan domain portofolio dan `localhost` ke **Authentication → Settings → Authorized domains** sesuai kebutuhan. Untuk project lain, isi empat variabel Firebase yang sama di environment Vercel, kemudian build/deploy ulang. `vercel.json` mendukung akses langsung ke URL Blog, Login, dan Editor.
 
 Untuk **project baru yang khusus blog** dan rules-nya belum berisi aplikasi lain:
 
@@ -86,7 +90,7 @@ Collection yang digunakan:
 - `portfolioPosts/{id}`: `title`, `excerpt`, `body`, `tag`, `status` (`draft`/`published`), `authorId`, `createdAt`, `updatedAt`, `publishedAt`.
 - `portfolioBlogAdmins/{uid}`: `enabled: true` untuk akun yang diizinkan menulis.
 
-Repository ini tidak membuat akun atau mengisi artikel di Firebase production secara otomatis. Tidak ada artikel contoh yang dipublikasikan ke database production. Jika konfigurasi belum dipasang, pembaca melihat keadaan blog kosong; halaman login memberi petunjuk konfigurasi khusus pengelola.
+Repository ini tidak membuat akun atau mengisi artikel contoh di Firebase production saat build. Jika override untuk project lain belum lengkap, halaman login memberi petunjuk konfigurasi khusus pengelola; deploy ADENA memakai konfigurasi Web App bawaan yang sudah terdaftar.
 
 ### Pengujian database lokal
 
