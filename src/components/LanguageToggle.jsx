@@ -1,4 +1,4 @@
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/useLanguage';
 import PropTypes from 'prop-types';
 
 const LanguageToggle = ({ isScrolled }) => {

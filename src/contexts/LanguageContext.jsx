@@ -1,16 +1,6 @@
-import { createContext, useContext, useState } from 'react';
+import { useState } from 'react';
 import PropTypes from 'prop-types';
-
-const LanguageContext = createContext();
-
-// Custom hook for using language context
-function useLanguage() {
-  const context = useContext(LanguageContext);
-  if (!context) {
-    throw new Error('useLanguage must be used within LanguageProvider');
-  }
-  return context;
-}
+import { LanguageContext } from './useLanguage';
 
 // Language Provider Component
 function LanguageProvider({ children }) {
@@ -34,4 +24,4 @@ LanguageProvider.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-export { useLanguage, LanguageProvider };
+export { LanguageProvider };

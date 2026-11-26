@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MenuIcon, CloseIcon } from './Icons';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/useLanguage';
 import { translations } from './translations';
 import LanguageToggle from './LanguageToggle';
 
@@ -133,4 +133,3 @@ const Navigation = () => {
 };
 
 export default Navigation;
-

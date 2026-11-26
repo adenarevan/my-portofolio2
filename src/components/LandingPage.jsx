@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/useLanguage';
 import portrait from '../assets/gua.jpeg';
-import { copy, projects } from './portfolioContent';
+import { copy, projects, profile, repositories } from './portfolioContent';
 
 export default function LandingPage() {
   const { language, setLanguage } = useLanguage();
   const t = copy[language];
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeProject, setActiveProject] = useState(0);
-  const [expandedProject, setExpandedProject] = useState(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [filter, setFilter] = useState('all');
   const [service, setService] = useState('web');
   const [copied, setCopied] = useState(false);
   const [formStatus, setFormStatus] = useState('');
   const pageRef = useRef(null);
   const menuButtonRef = useRef(null);
   const copyTimer = useRef(null);
+  const project = projects[activeProject];
+  const filteredRepositories = repositories.filter(item => filter === 'all' || item.group === filter);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -48,7 +51,7 @@ export default function LandingPage() {
 
   async function copyEmail() {
     try {
-      await navigator.clipboard.writeText('adenarevan@gmail.com');
+      await navigator.clipboard.writeText(profile.email);
       setCopied(true);
       window.clearTimeout(copyTimer.current);
       copyTimer.current = window.setTimeout(() => setCopied(false), 2400);
@@ -60,7 +63,7 @@ export default function LandingPage() {
     const data = new FormData(event.currentTarget);
     const body = `${t.formGreeting}\n\n${data.get('message')}\n\n${t.serviceLabel}: ${t.services.find(item => item.id === service).title}\n${t.nameLabel}: ${data.get('name')}\nEmail: ${data.get('email')}`;
     const subject = `${t.mailSubject} — ${data.get('name')}`;
-    window.location.href = `mailto:adenarevan@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = `mailto:${profile.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     setFormStatus(t.mailStatus);
   }
 
@@ -82,20 +85,39 @@ export default function LandingPage() {
       </header>
       <main id="main">
         <section className="hero frame" id="home" aria-labelledby="hero-title">
-          <h1 id="hero-title" className="hero-name"><span className="name-mask"><span>ADENA</span></span><span className="name-mask"><span>REIS VANRIKA</span></span></h1>
-          <div className="hero-portrait"><img src={portrait} width="863" height="1083" alt="Adena Reis Vanrika" fetchPriority="high" /></div>
-          <div className="hero-bottom"><div className="hero-intro"><p className="hero-role">Software engineer</p><p>{t.heroDescription}</p></div><div className="hero-actions"><a className="button" href="#portfolio">{t.seeWork}<span aria-hidden="true">+</span></a><a className="text-link" href="https://github.com/adenarevan" target="_blank" rel="noreferrer">GitHub</a></div></div>
+          <h1 id="hero-title" className="hero-name"><span className="name-mask"><span>ADENA REIS</span></span><span className="name-mask"><span>VANRIKA</span></span></h1>
+          <div className="hero-bottom"><div className="hero-intro"><p className="hero-role">Full-stack web developer</p><p>{t.heroDescription}</p></div><div className="hero-actions"><a className="button" href="#portfolio">{t.seeWork}<span aria-hidden="true">↗</span></a><a className="text-link" href={profile.github} target="_blank" rel="noreferrer">GitHub</a></div></div>
         </section>
         <section className="work section-space frame" id="portfolio" aria-labelledby="work-title">
           <div className="section-heading" data-reveal><h2 id="work-title">{t.workTitle}</h2><p>{t.workIntro}</p></div>
           <div className="project-layout"><div className="project-index">
-            {projects.map((project, index) => <article key={project.id} className={`project-item ${activeProject === index ? 'is-active' : ''}`} data-reveal>
-              <div className="mobile-project-preview"><img src={`/projects/${project.id}.png`} alt={`${project.title} — ${t.interfaceStudy}`} width="559" height="472" loading="lazy" /></div>
-              <button className="project-select" type="button" aria-expanded={expandedProject === index} aria-controls={`project-detail-${project.id}`} onMouseEnter={() => setActiveProject(index)} onFocus={() => setActiveProject(index)} onClick={() => { setActiveProject(index); setExpandedProject(expandedProject === index ? null : index); }}><span className="project-category">{project.category[language]}</span><span className="project-title">{project.title}</span><span className="project-toggle" aria-hidden="true">{expandedProject === index ? '−' : '+'}</span></button>
-              <div className="project-details" id={`project-detail-${project.id}`} hidden={expandedProject !== index}><p>{project.description[language]}</p><ul className="tech-list" aria-label="Technology">{project.tech.map(tech => <li key={tech}>{tech}</li>)}</ul><p className="project-note">{t.projectNote}</p></div>
+            {projects.map((item, index) => <article key={item.id} className={`project-item ${activeProject === index ? 'is-active' : ''}`} data-reveal>
+              <button className="project-select" type="button" aria-expanded={activeProject === index} aria-controls={`project-detail-${item.id}`} onClick={() => setActiveProject(index)}><span className="project-category">{item.category[language]}</span><span className="project-title">{item.title}</span><span className="project-toggle" aria-hidden="true">{activeProject === index ? '−' : '+'}</span></button>
+              <div className="project-details" id={`project-detail-${item.id}`} hidden={activeProject !== index}>
+                <div className="mobile-project-preview"><img src={`/projects/${item.id}.jpg`} alt={`${item.title}: ${t.screenshot}`} width="1440" height="1000" loading="lazy" /></div>
+                <p>{item.description[language]}</p>
+                <ul className="project-features" aria-label={t.features}>{item.features[language].map(feature => <li key={feature}>{feature}</li>)}</ul>
+                {item.tech.length > 0 && <ul className="tech-list" aria-label="Technology">{item.tech.map(tech => <li key={tech}>{tech}</li>)}</ul>}
+                <div className="project-links"><a className="text-link" href={item.url} target="_blank" rel="noreferrer">{t.visit}</a>{item.repo ? <a className="text-link" href={`${profile.github}/${item.repo}`} target="_blank" rel="noreferrer">{t.source}</a> : <span className="private-repository">{t.privateRepo}</span>}</div>
+                <p className="project-note">{item.note[language]}</p>
+              </div>
             </article>)}
-            <a className="work-github text-link" href="https://github.com/adenarevan" target="_blank" rel="noreferrer">{t.exploreCode}</a>
-          </div><div className="project-stage"><div className="project-screen"><img key={projects[activeProject].id} src={`/projects/${projects[activeProject].id}.png`} alt={`${projects[activeProject].title} — ${t.interfaceStudy}`} width="559" height="472" loading="lazy" /></div><div className="project-caption"><span>{projects[activeProject].title}</span><span>{t.interfaceStudy}</span></div><div className="project-thumbnails" aria-label={t.workTitle}>{projects.map((project, index) => <button type="button" key={project.id} aria-label={project.title} aria-pressed={activeProject === index} onClick={() => setActiveProject(index)}><img src={`/projects/${project.id}.png`} alt="" width="559" height="472" loading="lazy" /></button>)}</div></div></div>
+          </div><div className="project-stage" data-reveal><a href={project.url} target="_blank" rel="noreferrer" className={`project-screen project-screen-${project.id}`} aria-label={`${t.visit}: ${project.title}`}><img key={project.id} src={`/projects/${project.id}.jpg`} alt={`${project.title}: ${t.screenshot}`} width="1440" height="1000" loading="lazy" /></a><div className="project-caption"><span>{project.title}</span><span>{t.screenshot}</span></div><div className="project-thumbnails" aria-label={t.preview}>{projects.map((item, index) => <button type="button" key={item.id} aria-label={item.title} aria-pressed={activeProject === index} onClick={() => setActiveProject(index)}><img src={`/projects/${item.id}.jpg`} alt="" width="1440" height="1000" loading="lazy" /></button>)}</div></div></div>
+          <div className="restaurant-project" data-reveal>
+            <div><h3>{t.restaurantTitle}</h3><p>{t.restaurantDescription}</p></div>
+            <div className="restaurant-repos">
+              <a href={`${profile.github}/restoran-frontend`} target="_blank" rel="noreferrer"><strong>Frontend</strong><span>{t.restaurantFrontend}</span><span className="text-link">{t.restaurantLink}</span></a>
+              <a href={`${profile.github}/restoran-api`} target="_blank" rel="noreferrer"><strong>Backend</strong><span>{t.restaurantBackend}</span><span className="text-link">{t.restaurantLink}</span></a>
+            </div>
+          </div>
+          <div className="archive">
+            <div className="archive-heading" data-reveal><h3>{t.archiveTitle}</h3><button className="text-link" type="button" aria-expanded={archiveOpen} aria-controls="github-archive" onClick={() => setArchiveOpen(!archiveOpen)}>{archiveOpen ? t.archiveClose : t.archiveToggle} <span aria-hidden="true">{archiveOpen ? '−' : '+'}</span></button></div>
+            <div id="github-archive" hidden={!archiveOpen}>
+              <p className="archive-intro">{t.archiveIntro}</p>
+              <div className="archive-controls"><div className="archive-filters" aria-label={t.archiveTitle}>{t.filters.map(item => <button key={item.id} type="button" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>{item.label}</button>)}</div><p className="archive-count" role="status">{filteredRepositories.length} {t.resultCount}</p></div>
+              <ul className="repository-list">{filteredRepositories.map(repo => <li key={repo.name}><a href={`${profile.github}/${repo.name}`} target="_blank" rel="noreferrer" aria-label={`${repo.name}: ${t.archiveSource}`}><span className="repository-name">{repo.name}</span><span className="repository-description">{repo.description[language]}</span><span className="repository-language">{repo.tech}</span></a></li>)}</ul>
+            </div>
+          </div>
         </section>
         <section className="about frame section-space" id="about" aria-labelledby="about-title">
           <div className="about-photo" data-reveal><img src={portrait} alt={t.portraitAlt} width="863" height="1083" loading="lazy" /></div>
@@ -103,8 +125,8 @@ export default function LandingPage() {
         </section>
         <section className="services frame section-space" id="services" aria-labelledby="services-title">
           <div className="section-heading" data-reveal><h2 id="services-title">{t.servicesTitle}</h2><p>{t.servicesIntro}</p></div>
-          <div className="services-body"><div className="service-list">{t.services.map(item => <button type="button" key={item.id} className={service === item.id ? 'service-choice selected' : 'service-choice'} aria-pressed={service === item.id} onClick={() => setService(item.id)} data-reveal>{item.title}<span aria-hidden="true">{service === item.id ? '−' : '+'}</span></button>)}</div><div className="service-description" aria-live="polite" data-reveal><h3>{t.services.find(item => item.id === service).title}</h3><p>{t.services.find(item => item.id === service).description}</p><ul>{t.services.find(item => item.id === service).items.map(item => <li key={item}>{item}</li>)}</ul><a className="text-link" href="#contact">{t.discussService}</a></div></div>
-          <div className="stack" data-reveal><span>{t.stack}</span><p>React<span>Laravel</span>JavaScript<span>Node.js</span>PostgreSQL<span>Docker</span></p></div>
+          <div className="services-body"><div className="service-list">{t.services.map(item => <button type="button" key={item.id} className={service === item.id ? 'service-choice selected' : 'service-choice'} aria-pressed={service === item.id} onClick={() => setService(item.id)} data-reveal>{item.title}<span aria-hidden="true">{service === item.id ? '−' : '+'}</span></button>)}</div><div className="service-description" aria-live="polite" data-reveal><h3>{t.services.find(item => item.id === service).title}</h3><p>{t.services.find(item => item.id === service).description}</p><ul>{t.services.find(item => item.id === service).items.map(item => <li key={item}>{item}</li>)}</ul></div></div>
+          <ul className="stack" aria-label={t.stack} data-reveal>{['React', 'Next.js', 'TypeScript', 'Laravel', 'Firebase', 'Tailwind CSS'].map(tech => <li key={tech}>{tech}</li>)}</ul>
         </section>
         <section className="contact frame section-space" id="contact" aria-labelledby="contact-title">
           <div className="contact-intro"><h2 id="contact-title" data-reveal>{t.contactTitle}</h2><p data-reveal>{t.contactDescription}</p><a className="contact-email" href="mailto:adenarevan@gmail.com">adenarevan<span>@gmail.com</span></a><button className="text-link copy-email" type="button" onClick={copyEmail} aria-live="polite">{copied ? t.copied : t.copyEmail}</button><div className="contact-socials"><a href="https://wa.me/6289612142465" target="_blank" rel="noreferrer">WhatsApp</a><a href="https://github.com/adenarevan" target="_blank" rel="noreferrer">GitHub</a><a href="https://linkedin.com/in/adena-reis-vanrika-0bb104187/" target="_blank" rel="noreferrer">LinkedIn</a></div></div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLanguage } from '../../contexts/LanguageContext';
+import { useLanguage } from '../../contexts/useLanguage';
 import { translations } from '../translations';
 
 const CTASection = () => {

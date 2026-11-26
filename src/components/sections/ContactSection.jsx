@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { EmailIcon, WhatsAppIcon, LinkedInIcon, GitHubIcon } from '../Icons';
-import { useLanguage } from '../../contexts/LanguageContext';
+import { useLanguage } from '../../contexts/useLanguage';
 import { translations } from '../translations';
 
 const ContactSection = () => {

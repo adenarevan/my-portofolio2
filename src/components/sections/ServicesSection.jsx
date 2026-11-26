@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { CodeIcon, ReactIcon, ApiIcon, RefreshIcon } from '../Icons';
-import { useLanguage } from '../../contexts/LanguageContext';
+import { useLanguage } from '../../contexts/useLanguage';
 import { translations } from '../translations';
 
 const iconMap = {
