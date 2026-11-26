@@ -60,13 +60,15 @@ export function createBotRunner({ db, workerId, generate, collect = collectCandi
         db.collection(BOT_COLLECTIONS.topics).get(), db.collection('portfolioPosts').select('title', 'slug', 'sources').get(),
       ]);
       const history = historySnapshot.docs.map(doc => doc.data());
-      const posts = postsSnapshot.docs.map(doc => doc.data());
+      const posts = postsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       const usedUrls = new Set([...history.flatMap(topic => topic.urls || []), ...posts.flatMap(post => (post.sources || []).map(source => source.url))]);
       let created = acquired.carried.length; let attempted = 0; let generated = 0;
       for (const candidate of discovery.candidates) {
         if (created >= settings.maxArticles || generated >= settings.maxArticles || attempted >= settings.maxArticles + 2) break;
-        const duplicate = candidate.items.some(item => usedUrls.has(item.url)) || history.some(topic => sameTopic(topic.tokens, candidate.tokens)) || posts.some(post => sameTopic(titleTokens(post.title), candidate.tokens));
-        if (duplicate) { items.push({ status: 'skipped', title: candidate.title, reason: 'Topik atau sumber sudah pernah dibuat.' }); continue; }
+        const historyMatch = history.find(topic => sameTopic(topic.tokens, candidate.tokens) || candidate.items.some(item => topic.urls?.includes(item.url)));
+        const existingPost = posts.find(post => post.id === historyMatch?.postId || sameTopic(titleTokens(post.title), candidate.tokens) || candidate.items.some(item => post.sources?.some(source => source.url === item.url)));
+        const duplicate = existingPost || historyMatch || candidate.items.some(item => usedUrls.has(item.url));
+        if (duplicate) { items.push({ status: 'skipped', title: existingPost?.title || candidate.title, reason: 'Topik atau sumber sudah pernah dibuat.', ...(existingPost ? { postId: existingPost.id, existingStatus: existingPost.status } : {}) }); continue; }
         attempted++;
         const sources = await readSources(candidate, diagnostics);
         if (new Set(sources.map(source => source.publisher)).size < 2) { items.push({ status: 'skipped', title: candidate.title, reason: 'Kurang dari dua penerbit independen dengan bahan yang dapat dibaca.' }); continue; }
@@ -91,14 +93,14 @@ export function createBotRunner({ db, workerId, generate, collect = collectCandi
             // Persist result atomically with the draft so a crash still leaves a trace.
             tx.update(runRef, { items: FieldValue.arrayUnion({ status: 'created', title: data.title, postId, reason }) });
           });
-          created++; sources.forEach(source => usedUrls.add(source.url)); history.push({ tokens: candidate.tokens, urls: sources.map(source => source.url) }); posts.push(data);
+          created++; sources.forEach(source => usedUrls.add(source.url)); history.push({ tokens: candidate.tokens, urls: sources.map(source => source.url), postId }); posts.push({ ...data, id: postId });
           items.push({ status: 'created', title: data.title, postId, reason });
         } catch (error) { items.push({ status: 'failed', title: candidate.title, reason: error.message.slice(0, 240) }); }
       }
       const failures = items.filter(item => item.status === 'failed').length;
       if (created) { status = failures ? 'partial' : 'created'; message = `${created} draf dibuat. Tinjau di editor sebelum diterbitkan.`; }
       else if (failures || diagnostics.filter(item => item.stage === 'rss' && item.status === 'ok').length === 0) { status = 'failed'; message = failures ? 'Penulisan gagal. Lihat rincian dan coba lagi.' : 'Semua feed gagal dibaca. Coba lagi nanti.'; }
-      else message = discovery.candidates.length ? 'Tidak ada topik baru dengan bahan sumber yang cukup.' : noCandidateMessage(stats, settings);
+      else message = items.some(item => item.postId) ? 'Topik yang cocok sudah memiliki artikel. Buka hasil yang sudah ada di editor.' : discovery.candidates.length ? 'Tidak ada topik baru dengan bahan sumber yang cukup.' : noCandidateMessage(stats, settings);
     } catch (error) { status = 'failed'; message = error.message.slice(0, 240); }
     await db.runTransaction(async tx => {
       const [lock, record] = await Promise.all([tx.get(lockRef), tx.get(runRef)]);

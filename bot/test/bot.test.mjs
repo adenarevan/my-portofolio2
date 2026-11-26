@@ -148,6 +148,8 @@ test('Manual and scheduled executions share a lock, create editable drafts, and 
   const post = posts.docs[0].data(); assert.equal(post.status, 'draft'); assert.equal(post.authorId, 'owner'); assert.ok(post.bot.selectionReason);
   const repeated = await run(manual('manual-repeat-123456'));
   assert.equal(repeated.status, 'skipped'); assert.equal((await db.collection('portfolioPosts').get()).size, 1);
+  const duplicateLog = (await db.collection(BOT_COLLECTIONS.runs).doc(repeated.runId).get()).data();
+  assert.equal(duplicateLog.items[0].postId, posts.docs[0].id); assert.equal(duplicateLog.items[0].existingStatus, 'draft');
   // Existing run requests replay their result without generating again.
   await run(manual()); assert.equal(calls, 1);
 });
@@ -186,7 +188,9 @@ test('Crash recovery preserves atomically committed drafts and durable history s
   assert.equal(recovered.status, 'created');
   const posts = await db.collection('portfolioPosts').get(); assert.equal(posts.size, 1);
   await adminDb.collection('portfolioPosts').doc(posts.docs[0].id).delete();
-  assert.equal((await fixtureRunner()(manual('deleted-draft-retry-1234'))).status, 'skipped');
+  const deletedRetry = await fixtureRunner()(manual('deleted-draft-retry-1234'));
+  assert.equal(deletedRetry.status, 'skipped');
+  assert.equal((await db.collection(BOT_COLLECTIONS.runs).doc(deletedRetry.runId).get()).data().items[0].postId, undefined);
   assert.equal((await db.collection('portfolioPosts').get()).size, 0);
 });
 
