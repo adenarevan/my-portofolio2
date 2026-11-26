@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isPortfolioBlogAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/portfolioBlogAdmins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/portfolioBlogAdmins/$(request.auth.uid)).data.enabled == true;
+    }
+    function isValidPortfolioPost() {
+      let p = request.resource.data;
+      return p.keys().hasAll(['title', 'excerpt', 'body', 'tag', 'status', 'authorId', 'createdAt', 'updatedAt', 'publishedAt'])
+        && p.keys().hasOnly(['title', 'excerpt', 'body', 'tag', 'status', 'authorId', 'createdAt', 'updatedAt', 'publishedAt'])
+        && p.title is string && p.title.size() > 0 && p.title.size() <= 140
+        && p.body is string && p.body.size() > 0 && p.body.size() <= 50000
+        && p.excerpt is string && p.excerpt.size() <= 320
+        && p.tag is string && p.tag.size() <= 40
+        && p.status in ['draft', 'published']
+        && p.authorId is string && p.createdAt is timestamp
+        && p.updatedAt == request.time
+        && (p.publishedAt == null || p.publishedAt is timestamp)
+        && (p.status != 'published' || p.publishedAt is timestamp);
+    }
+    match /portfolioBlogAdmins/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+    match /portfolioPosts/{postId} {
+      allow get: if isPortfolioBlogAdmin() || resource.data.status == 'published';
+      allow list: if isPortfolioBlogAdmin() || (resource.data.status == 'published' && request.query.limit <= 20);
+      allow create: if isPortfolioBlogAdmin() && isValidPortfolioPost()
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && (request.resource.data.publishedAt == null || request.resource.data.publishedAt == request.time);
+      allow update: if isPortfolioBlogAdmin() && isValidPortfolioPost()
+        && request.resource.data.authorId == resource.data.authorId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (request.resource.data.publishedAt == resource.data.publishedAt
+          || (resource.data.publishedAt == null && request.resource.data.status == 'published' && request.resource.data.publishedAt == request.time));
+      allow delete: if isPortfolioBlogAdmin();
+    }
+    // Preserve the existing project's default denial for other collections.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

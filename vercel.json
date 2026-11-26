@@ -1,0 +1,6 @@
+{
+  "rewrites": [{ "source": "/((?!assets/|fonts/|projects/|favicon.svg).*)", "destination": "/index.html" }],
+  "headers": [
+    { "source": "/(login|admin|admin/bot)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
+  ]
+}

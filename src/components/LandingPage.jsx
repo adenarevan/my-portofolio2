@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '../contexts/useLanguage';
 import portrait from '../assets/gua.jpeg';
 import { copy, projects, profile, repositories } from './portfolioContent';
+
+const BlogSection = lazy(() => import('./blog/BlogSection'));
 
 export default function LandingPage() {
   const { language, setLanguage } = useLanguage();
@@ -18,11 +21,6 @@ export default function LandingPage() {
   const copyTimer = useRef(null);
   const project = projects[activeProject];
   const filteredRepositories = repositories.filter(item => filter === 'all' || item.group === filter);
-
-  useEffect(() => {
-    document.documentElement.lang = language;
-    try { window.localStorage.setItem('portfolio-language', language); } catch { /* Storage may be disabled. */ }
-  }, [language]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(entries => {
@@ -73,12 +71,13 @@ export default function LandingPage() {
       <header className="site-header">
         <a className="wordmark" href="#home" aria-label="Adena Reis Vanrika, home">arv<span>.</span></a>
         <nav className={menuOpen ? 'navigation is-open' : 'navigation'} id="main-navigation" aria-label={t.navigation}>
-          {t.nav.map(link => <a key={link.href} href={link.href} onClick={() => setMenuOpen(false)}>{link.label}</a>)}
+          {t.nav.map(link => link.href.startsWith('/') ? <Link key={link.href} to={link.href} onClick={() => setMenuOpen(false)}>{link.label}</Link> : <a key={link.href} href={link.href} onClick={() => setMenuOpen(false)}>{link.label}</a>)}
         </nav>
         <div className="header-actions">
           <div className="language-switch" aria-label={t.language}>
             <button type="button" aria-pressed={language === 'id'} onClick={() => setLanguage('id')}>ID</button><span aria-hidden="true">/</span><button type="button" aria-pressed={language === 'en'} onClick={() => setLanguage('en')}>EN</button>
           </div>
+          <Link className="header-login" to="/login">Login</Link>
           <a className="header-contact" href="#contact">{t.talk}</a>
           <button ref={menuButtonRef} className="menu-toggle" type="button" aria-controls="main-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? t.close : 'Menu'}</button>
         </div>
@@ -128,6 +127,7 @@ export default function LandingPage() {
           <div className="services-body"><div className="service-list">{t.services.map(item => <button type="button" key={item.id} className={service === item.id ? 'service-choice selected' : 'service-choice'} aria-pressed={service === item.id} onClick={() => setService(item.id)} data-reveal>{item.title}<span aria-hidden="true">{service === item.id ? '−' : '+'}</span></button>)}</div><div className="service-description" aria-live="polite" data-reveal><h3>{t.services.find(item => item.id === service).title}</h3><p>{t.services.find(item => item.id === service).description}</p><ul>{t.services.find(item => item.id === service).items.map(item => <li key={item}>{item}</li>)}</ul></div></div>
           <ul className="stack" aria-label={t.stack} data-reveal>{['React', 'Next.js', 'TypeScript', 'Laravel', 'Firebase', 'Tailwind CSS'].map(tech => <li key={tech}>{tech}</li>)}</ul>
         </section>
+        <Suspense fallback={<div className="blog-section section-space frame" role="status">{language === 'id' ? 'Memuat blog…' : 'Loading blog…'}</div>}><BlogSection /></Suspense>
         <section className="contact frame section-space" id="contact" aria-labelledby="contact-title">
           <div className="contact-intro"><h2 id="contact-title" data-reveal>{t.contactTitle}</h2><p data-reveal>{t.contactDescription}</p><a className="contact-email" href="mailto:adenarevan@gmail.com">adenarevan<span>@gmail.com</span></a><button className="text-link copy-email" type="button" onClick={copyEmail} aria-live="polite">{copied ? t.copied : t.copyEmail}</button><div className="contact-socials"><a href="https://wa.me/6289612142465" target="_blank" rel="noreferrer">WhatsApp</a><a href="https://github.com/adenarevan" target="_blank" rel="noreferrer">GitHub</a><a href="https://linkedin.com/in/adena-reis-vanrika-0bb104187/" target="_blank" rel="noreferrer">LinkedIn</a></div></div>
           <form className="contact-form" onSubmit={submitBrief} data-reveal><p className="form-title">{t.briefTitle}</p><div className="form-row"><div><label htmlFor="name">{t.nameLabel}</label><input id="name" name="name" autoComplete="name" placeholder={t.namePlaceholder} required maxLength={100} /></div><div><label htmlFor="email">Email</label><input id="email" name="email" type="email" autoComplete="email" placeholder="you@company.com" required maxLength={200} /></div></div><label htmlFor="service">{t.serviceLabel}</label><select id="service" name="service" value={service} onChange={event => setService(event.target.value)}>{t.services.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select><label htmlFor="message">{t.messageLabel}</label><textarea id="message" name="message" placeholder={t.messagePlaceholder} rows={4} required maxLength={5000} /><button className="button" type="submit">{t.sendBrief}<span aria-hidden="true">+</span></button><p className="form-note">{t.formNote}</p><p className="form-status" role="status">{formStatus}</p></form>

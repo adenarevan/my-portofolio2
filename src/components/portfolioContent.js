@@ -104,7 +104,7 @@ export const repositories = [
 export const copy = {
   id: {
     skip: 'Langsung ke konten', navigation: 'Navigasi utama', language: 'Bahasa', close: 'Tutup', talk: 'Hubungi saya',
-    nav: [{ href: '#portfolio', label: 'Proyek' }, { href: '#about', label: 'Tentang' }, { href: '#services', label: 'Keahlian' }],
+    nav: [{ href: '#portfolio', label: 'Proyek' }, { href: '#about', label: 'Tentang' }, { href: '#services', label: 'Keahlian' }, { href: '/blog', label: 'Blog' }],
     heroDescription: 'Web developer di Jakarta. Saya membangun aplikasi dengan React, Next.js, dan Laravel, dari antarmuka hingga API.',
     seeWork: 'Lihat proyek', workTitle: 'Proyek pilihan', workIntro: 'Sistem informasi infrastruktur, aplikasi, dan website bisnis. Jelajahi proyek dan pendekatan di baliknya.',
     source: 'Source code', privateRepo: 'Repository privat', visit: 'Buka website', screenshot: 'Tampilan website asli', preview: 'Pilih pratinjau proyek', features: 'Fitur utama',
@@ -128,7 +128,7 @@ export const copy = {
   },
   en: {
     skip: 'Skip to content', navigation: 'Main navigation', language: 'Language', close: 'Close', talk: 'Get in touch',
-    nav: [{ href: '#portfolio', label: 'Projects' }, { href: '#about', label: 'About' }, { href: '#services', label: 'Expertise' }],
+    nav: [{ href: '#portfolio', label: 'Projects' }, { href: '#about', label: 'About' }, { href: '#services', label: 'Expertise' }, { href: '/blog', label: 'Blog' }],
     heroDescription: 'Web developer based in Jakarta. I build with React, Next.js, and Laravel, connecting interfaces with the APIs behind them.',
     seeWork: 'View projects', workTitle: 'Selected projects', workIntro: 'Infrastructure information systems, applications, and business websites. Explore the projects and the approach behind them.',
     source: 'Source code', privateRepo: 'Private repository', visit: 'Visit website', screenshot: 'Actual website preview', preview: 'Select a project preview', features: 'Key features',

@@ -35,4 +35,5 @@ export default [
       ],
     },
   },
+  { files: ['bot/src/**/*.js'], languageOptions: { globals: globals.node } },
 ]

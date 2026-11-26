@@ -1,0 +1,36 @@
+name: Bot Artikel Trending
+on:
+  schedule:
+    - cron: '5,20,35,50 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: portfolio-trending-bot
+  cancel-in-progress: false
+jobs:
+  process-drafts:
+    if: vars.TRENDING_BOT_CONFIGURED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+      FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+      FIREBASE_BOT_EMAIL: ${{ vars.FIREBASE_BOT_EMAIL }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.1-flash-lite' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: bot/package-lock.json
+      - run: npm ci --omit=dev --ignore-scripts
+        working-directory: bot
+      - run: npm start
+        working-directory: bot
+        env:
+          FIREBASE_BOT_PASSWORD: ${{ secrets.FIREBASE_BOT_PASSWORD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

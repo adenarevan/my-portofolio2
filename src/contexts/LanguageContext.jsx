@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { LanguageContext } from './useLanguage';
 
@@ -12,6 +12,11 @@ function LanguageProvider({ children }) {
   const toggleLanguage = () => {
     setLanguage(prev => prev === 'en' ? 'id' : 'en');
   };
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    try { window.localStorage.setItem('portfolio-language', language); } catch { /* Storage may be disabled. */ }
+  }, [language]);
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage }}>
