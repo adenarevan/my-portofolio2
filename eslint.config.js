@@ -36,4 +36,5 @@ export default [
     },
   },
   { files: ['bot/src/**/*.js'], languageOptions: { globals: globals.node } },
+  { files: ['server/**/*.js', 'api/**/*.js', 'vite.config.js'], languageOptions: { globals: globals.node } },
 ]

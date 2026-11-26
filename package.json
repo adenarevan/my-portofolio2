@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test:content": "node --test tests/blog.content.test.mjs",
+    "test:dispatch": "node --test tests/bot.dispatch.test.mjs",
     "test:bot": "npm --prefix bot test",
     "dev:bot": "firebase emulators:start --only auth,firestore --project demo-portfolio-blog",
     "bot:run": "node bot/src/index.js",

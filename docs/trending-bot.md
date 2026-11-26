@@ -7,13 +7,21 @@ Menu `/admin/bot` memakai layout admin yang sama. Hasil bot selalu **draf**, dib
 ## Alur dan default
 
 1. Admin menyimpan pengaturan langsung ke Firestore. Rules memvalidasi keanggotaan admin, revisi, kategori, wilayah, hari, waktu, sumber dan batas artikel.
-2. “Jalankan Sekarang” menambahkan satu permintaan ke `portfolioBotRequests/{uid}`. Permintaan yang masih menunggu tidak ditimpa atau digandakan. Tidak ada token GitHub atau key AI di browser.
+2. “Jalankan Sekarang” menambahkan satu permintaan ke `portfolioBotRequests/{uid}`, lalu memanggil endpoint server `/api/bot/dispatch` untuk memicu workflow langsung. Permintaan yang masih menunggu tidak ditimpa atau digandakan. Tidak ada token GitHub atau key AI di browser.
 3. Workflow `.github/workflows/trending-bot.yml` berjalan sekitar setiap 15 menit (`05/20/35/50` setiap jam UTC). Runner memproses antrean dan membaca jadwal Firestore saat berjalan. Mengubah jadwal tidak memerlukan deploy ulang.
 4. Sumber yang memenuhi syarat dikirim ke Gemini. Hasil terstruktur divalidasi dan disimpan sebagai draf. Riwayat mencatat dibuat/dilewati/gagal, alasan, dan tautan editor.
 
 Default **nonaktif**, Indonesia, 24 jam, AI/teknologi/pemrograman, satu draf setiap hari pukul **08.00 WIB** (`Asia/Jakarta`). Pengecekan pertama biasanya sekitar 08.05 WIB. Jadwal harian memiliki jendela susulan 60 menit dan paling banyak tiga percobaan gagal per tanggal WIB. Manual tetap tersedia ketika jadwal nonaktif. Batas 1–3 draf per eksekusi juga membatasi panggilan penulisan AI.
 
-**“Jalankan Sekarang” adalah antrean, bukan proses seketika.** Waktu bergantung pada runner berikutnya dan dapat terlambat. GitHub dapat menunda/menggugurkan cron saat sibuk serta menonaktifkan jadwal repo publik setelah 60 hari tanpa aktivitas; aktifkan kembali lewat GitHub Actions bila diperlukan. Tidak ada commit buatan untuk menyiasati aturan tersebut.
+**Manual memicu runner langsung jika endpoint dikonfigurasi.** GitHub tetap membutuhkan waktu untuk menyediakan runner dan membaca sumber; artikel tidak dihasilkan di browser. Halaman boleh ditutup setelah antrean tersimpan. Jika pemicu gagal, antrean tetap diproses oleh cron sekitar setiap 15 menit dan UI memberi tautan Run workflow sebagai alternatif. GitHub dapat menunda/menggugurkan cron saat sibuk serta menonaktifkan jadwal repo publik setelah 60 hari tanpa aktivitas; aktifkan kembali lewat GitHub Actions bila diperlukan. Tidak ada commit buatan untuk menyiasati aturan tersebut.
+
+### Pemicu langsung di lokal dan Vercel
+
+- **Lokal (`npm run dev`)**: middleware Vite memakai `GITHUB_BOT_TOKEN` jika diisi; jika kosong, memakai login Git yang sudah tersimpan melalui `git credential fill` tanpa prompt. Keduanya hanya dibaca proses Node. Tidak perlu menjalankan worker AI atau emulator agar tombol lokal dapat memicu bot online.
+- **Vercel**: endpoint `api/bot/dispatch.js` membutuhkan environment server **`GITHUB_BOT_TOKEN`**. Gunakan fine-grained token yang dibatasi ke repository ini dengan izin **Actions: read/write**, serta `FIREBASE_PROJECT_ID` atau konfigurasi `VITE_FIREBASE_PROJECT_ID` yang sudah ada. Simpan melalui pengaturan environment Vercel lalu redeploy. Jangan memakai awalan `VITE_` untuk token. Tanpa token, mode antrean terjadwal tetap berjalan.
+- Endpoint meneruskan ID token pengguna ke Firestore untuk validasi oleh Firebase dan Security Rules, memeriksa membership admin yang aktif, lalu memastikan UID, request ID dan status antrean cocok. Token tak valid/non-admin ditolak sebelum kredensial GitHub dibaca. Target workflow dan branch tetap di server; request browser tidak dapat menggantinya. Cooldown membatasi pemicu berulang, sementara kunci/concurrency worker tetap mencegah artikel ganda.
+- Mode `demo-*` tidak memicu GitHub production; worker emulator tetap dijalankan secara lokal. Tidak ada perubahan rules, secret AI, atau billing Firebase untuk fitur pemicu ini.
+- `npm run test:dispatch` memeriksa autentikasi, kepemilikan antrean, duplikasi pemicu, fallback dan kegagalan koneksi.
 
 ## Yang tetap gratis dan batasnya
 
@@ -51,7 +59,7 @@ Kode/workflow dan rules dalam repo perlu dipublikasikan sebelum bot dapat dipaka
 
    Workflow tetap melewati job sampai variable `TRENDING_BOT_CONFIGURED` bernilai `true`. Pengaturan jadwal di Firestore tetap default nonaktif; script tidak mengaktifkannya. Tidak ada setup billing, IAM service account, API Cloud Functions atau pembayaran.
 
-5. Jalankan **Actions → Bot Artikel Trending → Run workflow** untuk pengecekan awal. Di admin akan terlihat waktu runner terakhir terhubung. Klik “Jalankan Sekarang”, kemudian tunggu workflow berikutnya (atau Run workflow dari GitHub). Tinjau draf dan sumber sebelum mengaktifkan jadwal harian.
+5. Jalankan **Actions → Bot Artikel Trending → Run workflow** untuk pengecekan awal. Di admin akan terlihat waktu runner terakhir terhubung. Klik “Jalankan Sekarang”; jika pemicu langsung tersedia, workflow mulai tanpa menunggu cron. Tombol “Mulai runner sekarang” dapat memicu antrean yang sudah tersimpan. Tinjau draf dan sumber sebelum mengaktifkan jadwal harian.
 
 Jika memakai project/repo lain, sesuaikan konstanta pada script setup, URL Actions pada halaman admin, dan baseline rules yang telah ditinjau. Jangan menggunakan password admin manusia sebagai password runner.
 
@@ -72,6 +80,10 @@ Rules baru perlu diterapkan di production; kode frontend saja tidak memperbaiki 
 [Google Trends API](https://developers.google.com/search/apis/trends) masih memerlukan penerimaan alpha; implementasi memakai **konsensus RSS**, bukan volume pencarian atau peringkat tren Google.
 
 Katalog server: ANTARA Tekno (`https://www.antaranews.com/rss/tekno.xml`), CNN Indonesia (`https://www.cnnindonesia.com/teknologi/rss`), CNBC Indonesia (`https://www.cnbcindonesia.com/tech/rss`), TechCrunch (`https://techcrunch.com/feed/`) dan The Verge (`https://www.theverge.com/rss/index.xml`). Seluruh endpoint merespons HTTP 200 saat dicek. Beberapa feed alternatif memberi 403/404 dan tidak digunakan.
+
+Respons HTTP 200 belum menjamin feed masih baru. Log kini mencatat jumlah entri dalam rentang waktu dan tanggal terbaru. Bila feed ANTARA Tekno tertinggal atau gagal, bot juga memeriksa RSS Terkini resmi ANTARA (`https://www.antaranews.com/rss/terkini.xml`), lalu menerapkan kategori dan wilayah yang sama. Sumber cadangan tetap satu grup ANTARA, sehingga tidak dihitung sebagai penerbit independen tambahan. Filter Indonesia bisa sah menghasilkan nol draf jika hanya grup CNN/CNBC yang mempunyai liputan baru; Global memperluas sumber liputan, sementara bahasa penulisan tetap Indonesia.
+
+Halaman admin menampilkan hasil permintaan yang selesai (termasuk jumlah entri yang gugur dan tautan draf) dan menyembunyikan pesan pemicu yang sudah tidak berlaku. “Runner dipicu” tidak berarti draf sudah dibuat.
 
 Indonesia berarti liputan dari penerbit Indonesia, bukan pengukuran lokasi pembaca. Kandidat disaring berdasarkan waktu publikasi, kata kunci kategori, wilayah penerbit dan kemiripan judul/versi. Minimal dua grup penerbit independen harus menyediakan bahan terbaca; CNN/CNBC digrupkan konservatif sebagai satu grup. Halaman yang gagal dibaca hanya boleh digantikan ringkasan RSS jika tersedia minimal 180 karakter. Maksimal tiga penerbit dibaca per topik dan 4.000 karakter bahan per sumber; tidak melewati login/paywall atau pemblokiran.
 

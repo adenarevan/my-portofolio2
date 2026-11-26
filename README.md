@@ -90,6 +90,8 @@ Repository ini tidak membuat akun atau mengisi artikel di Firebase production se
 
 ### Pengujian database lokal
 
+Tombol bot lokal sekarang memicu GitHub Actions langsung melalui middleware Vite, memakai login Git lokal atau `GITHUB_BOT_TOKEN` server-only. Jika pemicu belum tersedia, antrean tetap diproses jadwal sekitar 15 menit dan halaman menampilkan alternatif manual. Setup Vercel dan pengujian akses pemicu dijelaskan di [panduan bot](docs/trending-bot.md#pemicu-langsung-di-lokal-dan-vercel).
+
 ```sh
 npm run test:rules
 ```

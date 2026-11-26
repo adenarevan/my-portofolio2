@@ -4,7 +4,7 @@ import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
 import { FirestoreStore, FieldValue } from '../src/store.js';
 import { DEFAULT_BOT_SETTINGS, scheduledSlot, validateSettings, RSS_SOURCES } from '../src/botConfig.js';
-import { canonicalUrl, parseFeed, selectCandidates, sameTopic, titleTokens, collectCandidates, readableSources } from '../src/sources.js';
+import { canonicalUrl, parseFeed, selectCandidates, sameTopic, titleTokens, collectCandidates, readableSources, noCandidateMessage } from '../src/sources.js';
 import { articleToPost, validateArticle, writeArticle } from '../src/writer.js';
 import { BOT_COLLECTIONS, createBotRunner, updateBotSettings } from '../src/engine.js';
 import { processBotTick } from '../src/queue.js';
@@ -53,9 +53,32 @@ test('RSS consensus filters category, region, recency and publisher ownership', 
 test('A failing feed is logged and a readable RSS summary can back up an unavailable article', async () => {
   const diagnostics = [];
   await collectCandidates(DEFAULT_BOT_SETTINGS, diagnostics, date, async () => { throw new Error('HTTP 503'); });
-  assert.equal(diagnostics.filter(item => item.status === 'failed').length, 3);
+  assert.equal(new Set(diagnostics.filter(item => item.status === 'failed').map(item => item.source)).size, 3);
   const sources = await readableSources(candidate, diagnostics, async () => { throw new Error('HTTP 403'); });
   assert.equal(sources.length, 2); assert.equal(sources[0].material, 'rss-summary');
+});
+
+test('Stale ANTARA feed falls back to its official latest feed and reports freshness', async () => {
+  const logs = [], urls = [];
+  const xml = (item, time) => `<rss><channel><item><title>${item.title}</title><link>${item.url}</link><pubDate>${time.toUTCString()}</pubDate><description>${item.summary}</description></item></channel></rss>`;
+  const result = await collectCandidates(DEFAULT_BOT_SETTINGS, logs, date, async url => {
+    urls.push(url);
+    if (url.includes('antaranews.com/rss/tekno.xml')) return { text: xml(sourceItems[0], new Date(date.getTime() - 4 * 86400000)) };
+    if (url.includes('antaranews.com/rss/terkini.xml')) return { text: xml(sourceItems[0], date) };
+    return { text: xml(sourceItems[1], date) };
+  });
+  assert.ok(urls.includes('https://www.antaranews.com/rss/terkini.xml'));
+  assert.equal(logs.find(item => item.feedUrl.endsWith('/tekno.xml')).recentCount, 0);
+  assert.equal(logs.find(item => item.feedUrl.endsWith('/terkini.xml')).recentCount, 1);
+  assert.equal(result.candidates.length, 1); assert.equal(result.stats.independentPublishers, 2);
+  assert.equal(result.stats.eligible, 2); assert.equal(result.stats.total, 3);
+});
+
+test('Skip explanations distinguish no fresh match, one publisher, and unrelated events', () => {
+  const one = selectCandidates(sourceItems.map(item => ({ ...item, publisher: 'ctcorp' })), DEFAULT_BOT_SETTINGS, date);
+  assert.match(noCandidateMessage(one.stats, DEFAULT_BOT_SETTINGS), /hanya dari 1 grup penerbit/);
+  assert.match(noCandidateMessage({ eligible: 0 }, DEFAULT_BOT_SETTINGS), /24 jam terakhir/);
+  assert.match(noCandidateMessage({ eligible: 3, independentPublishers: 2 }, { ...DEFAULT_BOT_SETTINGS, region: 'GLOBAL' }), /satu kejadian/);
 });
 test('AI contract uses server-only structured responses and rejects fabricated source IDs or URLs', async () => {
   let request;

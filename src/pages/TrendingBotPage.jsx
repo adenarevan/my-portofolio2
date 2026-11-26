@@ -4,7 +4,7 @@ import { signOut } from 'firebase/auth';
 import { auth, firebaseApp, firebaseConfigured } from '../lib/firebase';
 import { useBlogSession } from '../hooks/useBlog';
 import { usePageMeta } from '../hooks/usePageMeta';
-import { BOT_CATEGORIES, BOT_REGIONS, DEFAULT_BOT_SETTINGS, RSS_SOURCES, runBotNow, saveBotSettings, subscribeBotRequest, subscribeBotRuns, subscribeBotSettings, subscribeBotStatus } from '../lib/trendingBot';
+import { BOT_CATEGORIES, BOT_REGIONS, DEFAULT_BOT_SETTINGS, RSS_SOURCES, runBotNow, saveBotSettings, subscribeBotRequest, subscribeBotRuns, subscribeBotSettings, subscribeBotStatus, triggerBotRunner } from '../lib/trendingBot';
 import BlogShell from '../components/blog/BlogShell';
 import AdminNav from '../components/blog/AdminNav';
 
@@ -31,6 +31,7 @@ export default function TrendingBotPage() {
   const [remoteChanged, setRemoteChanged] = useState(false);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
+  const [dispatchNotice, setDispatchNotice] = useState(null);
   const [failed, setFailed] = useState(false);
   const [readErrors, setReadErrors] = useState({});
   const readError = Object.values(readErrors).join(' ');
@@ -91,12 +92,25 @@ export default function TrendingBotPage() {
     finally { setBusy(''); }
   }
   async function run() {
-    setBusy('run'); setMessage(''); setFailed(false);
+    setBusy('run'); setMessage(''); setFailed(false); setDispatchNotice(null);
     pendingRequest.current ||= crypto.randomUUID();
+    let timer;
     try {
-      const result = await runBotNow(pendingRequest.current);
-      pendingRequest.current = null; setMessage(result.message); setFailed(result.status === 'failed');
+      const result = await Promise.race([
+        runBotNow(pendingRequest.current),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Antrean belum mendapat konfirmasi Firebase. Periksa koneksi lalu coba lagi; permintaan yang sama tidak akan digandakan.')), 12000); }),
+      ]);
+      clearTimeout(timer); pendingRequest.current = null;
+      setBusy('dispatch');
+      const dispatch = await triggerBotRunner(result.requestId);
+      setDispatchNotice({ requestId: result.requestId, message: dispatch.message }); setFailed(false);
     } catch (error) { setFailed(true); setMessage(errorMessage(error)); }
+    finally { clearTimeout(timer); setBusy(''); }
+  }
+  async function startQueuedRunner() {
+    setBusy('dispatch'); setMessage(''); setFailed(false);
+    try { setDispatchNotice({ requestId: requestState.requestId, message: (await triggerBotRunner(requestState.requestId)).message }); }
+    catch (error) { setFailed(true); setMessage(errorMessage(error)); }
     finally { setBusy(''); }
   }
   if (!firebaseConfigured || !session.loading && !session.user) return <Navigate to="/login" replace />;
@@ -105,17 +119,26 @@ export default function TrendingBotPage() {
   if (!session.admin) return <Navigate to="/login" replace />;
   const activeRun = runs.find(run => run.status === 'running' && (run.startedAt?.toMillis?.() || 0) > Date.now() - 12 * 60000);
   const queued = requestState && ['queued', 'processing'].includes(requestState.status);
+  const resultRun = runs.find(run => run.id === requestState?.resultRunId);
+  const showDispatchNotice = dispatchNotice && (requestState?.requestId !== dispatchNotice.requestId || queued);
+  const requestLabel = requestState?.status === 'queued' ? 'Menunggu runner' : requestState?.status === 'processing' ? 'Bot sedang bekerja' : requestState?.status === 'failed' ? 'Eksekusi gagal' : resultRun?.status === 'skipped' ? 'Pencarian selesai — belum ada draf' : ['created', 'partial'].includes(resultRun?.status) ? 'Draf siap ditinjau' : 'Permintaan selesai';
   return <BlogShell editor><div className="admin-layout bot-layout frame">
     <aside className="editor-sidebar"><div className="editor-account"><h2>Editor blog</h2><p>{session.user.email}</p></div><AdminNav /><div className="editor-sidebar-footer"><Link className="text-link" to="/blog">Blog</Link><button className="text-link" onClick={() => {
       if (dirtyRef.current && !window.confirm('Pengaturan belum disimpan. Tetap keluar?')) return;
       signOut(auth).catch(() => { setFailed(true); setMessage('Belum dapat keluar. Coba lagi.'); });
     }}>Keluar</button></div></aside>
-    <div className="editor-workspace"><header className="bot-heading"><div><h1>Bot Artikel Trending</h1><p>Cari liputan yang ramai, siapkan draf, lalu tinjau sebelum terbit.</p></div><button className="blog-primary" onClick={run} disabled={!loaded || dirty || Boolean(busy) || Boolean(activeRun) || Boolean(queued) || Boolean(readError)}>{busy === 'run' ? 'Mengirim permintaan…' : requestState?.status === 'queued' ? 'Menunggu runner…' : activeRun || requestState?.status === 'processing' ? 'Bot sedang berjalan…' : 'Jalankan Sekarang'}</button></header>
-      <p className="bot-mode-note">Gemini menyiapkan draf dari konsensus RSS beberapa media. GitHub Actions memeriksa jadwal dan antrean sekitar setiap 15 menit; waktu dapat terlambat. Tombol manual tetap bisa dipakai saat jadwal nonaktif.</p>
+    <div className="editor-workspace"><header className="bot-heading"><div><h1>Bot Artikel Trending</h1><p>Cari liputan yang ramai, siapkan draf, lalu tinjau sebelum terbit.</p></div><button className="blog-primary" onClick={run} disabled={!loaded || dirty || Boolean(busy) || Boolean(activeRun) || Boolean(queued) || Boolean(readError)}>{busy === 'run' ? 'Menyimpan antrean…' : busy === 'dispatch' ? 'Memicu runner…' : requestState?.status === 'queued' ? 'Permintaan dalam antrean' : activeRun || requestState?.status === 'processing' ? 'Bot sedang berjalan…' : 'Jalankan Sekarang'}</button></header>
+      <p className="bot-mode-note">Tombol manual menyimpan antrean lalu memicu runner GitHub. Pencarian sumber dan penulisan berlangsung di server; halaman ini boleh ditutup. Jadwal otomatis tetap diperiksa sekitar setiap 15 menit.</p>
       <p className="bot-runner-status">{runnerStatus?.lastCheckAt ? `Runner terakhir terhubung: ${dateLabel(runnerStatus.lastCheckAt)}.` : 'Runner belum terhubung. Selesaikan konfigurasi GitHub Actions dan secret Gemini terlebih dahulu.'} <a className="text-link" href="https://github.com/adenarevan/my-portofolio2/actions/workflows/trending-bot.yml" target="_blank" rel="noopener noreferrer">Buka GitHub Actions</a></p>
       {readError && <div className="editor-message is-error" role="alert"><p>{readError}</p><button className="text-link" onClick={() => setAttempt(value => value + 1)}>Coba lagi</button></div>}
       {message && <p className={failed ? 'editor-message is-error' : 'editor-message'} role={failed ? 'alert' : 'status'}>{message}</p>}
-      {requestState && <p className="editor-message" role="status">{requestState.status === 'queued' ? 'Dalam antrean · ' : requestState.status === 'processing' ? 'Sedang diproses · ' : 'Permintaan terakhir · '}{requestState.message}</p>}
+      {showDispatchNotice && <p className="editor-message" role="status">{dispatchNotice.message}</p>}
+      {requestState && <div className="editor-message" role="status"><strong>{requestLabel}</strong><p>{requestState.message}</p>
+        {resultRun?.status === 'skipped' && resultRun.filterStats && <p className="editor-help">{resultRun.filterStats.total ?? resultRun.diagnostics?.filter(item => item.stage === 'rss' && item.status === 'ok').reduce((sum, item) => sum + (item.count || 0), 0)} entri diperiksa · {resultRun.filterStats.stale || 0} di luar rentang waktu · {resultRun.filterStats.category || 0} tidak cocok kategori · {resultRun.filterStats.singlePublisher || 0} kelompok topik belum didukung dua penerbit independen.</p>}
+        {resultRun?.status === 'skipped' && resultRun.settings?.region === 'ID' && <p className="editor-help">Untuk memperluas pilihan, ubah Wilayah liputan ke Global, simpan pengaturan, lalu jalankan lagi. Artikel tetap ditulis dalam bahasa Indonesia.</p>}
+        {resultRun?.items?.filter(item => item.postId).map(item => <p key={item.postId}><Link className="text-link" to={`/admin?post=${encodeURIComponent(item.postId)}`}>Buka draf: {item.title}</Link></p>)}
+      </div>}
+      {requestState?.status === 'queued' && <div className="editor-save-actions"><button type="button" className="blog-secondary" onClick={startQueuedRunner} disabled={Boolean(busy) || Boolean(readError)}>Mulai runner sekarang</button><a className="text-link" href="https://github.com/adenarevan/my-portofolio2/actions/workflows/trending-bot.yml" target="_blank" rel="noopener noreferrer">Jalankan lewat GitHub Actions</a></div>}
       <div className="bot-panels"><form ref={settingsPanel} className="bot-settings editor-form" onSubmit={save}>
         <div className="bot-section-heading"><h2>Pengaturan</h2><span>{dirty ? 'Belum disimpan' : form.enabled ? 'Jadwal aktif' : 'Jadwal nonaktif'}</span></div>
         {!loaded ? <p role={loadingSettings ? 'status' : undefined}>{loadingSettings ? 'Memuat pengaturan…' : 'Pengaturan belum dapat dibaca.'}</p> : <fieldset disabled={Boolean(busy) || Boolean(readError) || loadingSettings}>
@@ -132,7 +155,7 @@ export default function TrendingBotPage() {
       </form><section className="bot-history" aria-labelledby="bot-history-heading"><h2 id="bot-history-heading">Hasil eksekusi</h2>
         {loadingRuns ? <p role="status">Memuat riwayat…</p> : readErrors.runs ? <p>Riwayat belum dapat dibaca.</p> : !runs.length ? <p className="bot-empty">Belum ada eksekusi. Bot nonaktif sampai jadwal diaktifkan atau dijalankan secara manual.</p> : <ol className="bot-run-list">{runs.map(run => <li key={run.id} className="bot-run"><div className="bot-run-heading"><strong>{statusLabels[run.status] || run.status}</strong><time dateTime={run.startedAt?.toDate?.().toISOString()}>{dateLabel(run.startedAt)}</time></div><p role={run.status === 'running' ? 'status' : undefined}>{run.message}</p><p className="bot-run-trigger">{run.trigger === 'manual' ? 'Manual' : 'Terjadwal'}</p>
           {!!run.items?.length && <ul className="bot-result-list">{run.items.map((item, index) => <li key={index}><strong>{item.title}</strong><span>{statusLabels[item.status]} · {item.reason}</span>{item.postId && <Link className="text-link" to={`/admin?post=${encodeURIComponent(item.postId)}`}>Buka draf di editor</Link>}</li>)}</ul>}
-          {(run.diagnostics?.length > 0 || run.filterStats) && <details className="bot-diagnostics"><summary>Rincian sumber dan filter</summary>{run.filterStats && <p>Kedaluwarsa: {run.filterStats.stale || 0} · Kategori tidak cocok: {run.filterStats.category || 0} · Satu penerbit: {run.filterStats.singlePublisher || 0}</p>}<ul>{run.diagnostics?.map((item, index) => <li key={index}>{item.source} · {item.stage} · {item.status === 'ok' ? `${item.count} entri terbaca` : item.message}</li>)}</ul><p>ID: {run.id} · Percobaan: {run.attempt || 1}</p></details>}
+          {(run.diagnostics?.length > 0 || run.filterStats) && <details className="bot-diagnostics"><summary>Rincian sumber dan filter</summary>{run.filterStats && <p>Kedaluwarsa: {run.filterStats.stale || 0} · Kategori tidak cocok: {run.filterStats.category || 0} · Satu penerbit: {run.filterStats.singlePublisher || 0}</p>}<ul>{run.diagnostics?.map((item, index) => <li key={index}>{item.source} · {item.stage} · {item.status === 'ok' ? `${item.count} entri terbaca${item.recentCount !== undefined ? `, ${item.recentCount} dalam rentang waktu` : ''}` : item.message}{item.status === 'ok' && item.message ? ` · ${item.message}` : ''}</li>)}</ul><p>ID: {run.id} · Percobaan: {run.attempt || 1}</p></details>}
         </li>)}</ol>}
       </section></div>
     </div>

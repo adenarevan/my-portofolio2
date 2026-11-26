@@ -70,8 +70,8 @@ export function parseFeed(xml, source) {
   });
 }
 export function selectCandidates(items, settings, now = new Date()) {
-  const seen = new Set(); const groups = [];
-  const stats = { stale: 0, category: 0, region: 0, repeatedUrl: 0, singlePublisher: 0 };
+  const seen = new Set(); const groups = []; const publishers = new Set();
+  const stats = { total: items.length, eligible: 0, independentPublishers: 0, candidateCount: 0, stale: 0, category: 0, region: 0, repeatedUrl: 0, singlePublisher: 0 };
   for (const item of items) {
     const age = now.getTime() - new Date(item.publishedAt).getTime();
     if (age < -300000 || age > settings.windowHours * 3600000) { stats.stale++; continue; }
@@ -79,6 +79,7 @@ export function selectCandidates(items, settings, now = new Date()) {
     const categories = settings.categories.filter(category => words[category]?.test(`${item.title} ${item.summary}`));
     if (!categories.length) { stats.category++; continue; }
     if (seen.has(item.url)) { stats.repeatedUrl++; continue; } seen.add(item.url);
+    stats.eligible++; publishers.add(item.publisher);
     const group = groups.find(group => group.items.some(other => sameTopic(other.tokens, item.tokens)));
     if (group) { group.items.push(item); group.categories = [...new Set([...group.categories, ...categories])]; }
     else groups.push({ title: item.title, tokens: item.tokens, items: [item], categories });
@@ -87,13 +88,30 @@ export function selectCandidates(items, settings, now = new Date()) {
     if (new Set(group.items.map(item => item.publisher)).size < 2) { stats.singlePublisher++; return false; }
     return true;
   }).sort((a, b) => new Set(b.items.map(item => item.publisher)).size - new Set(a.items.map(item => item.publisher)).size || new Date(b.items[0].publishedAt) - new Date(a.items[0].publishedAt));
+  stats.independentPublishers = publishers.size; stats.candidateCount = candidates.length;
   return { candidates, stats };
 }
+
+export function noCandidateMessage(stats, settings) {
+  const scope = settings.region === 'ID' ? 'Indonesia' : 'Global';
+  if (!stats.eligible) return `Belum ada berita sesuai kategori dan wilayah ${scope} dalam ${settings.windowHours} jam terakhir. Tidak ada draf dibuat.`;
+  if (stats.independentPublishers < 2) return `${stats.eligible} berita sesuai filter ${scope}, tetapi hanya dari ${stats.independentPublishers} grup penerbit. Perlu dua penerbit independen untuk membuat draf.`;
+  return `${stats.eligible} berita sesuai filter ${scope}, tetapi belum ada satu kejadian yang didukung dua penerbit independen. Tidak ada draf dibuat.`;
+}
+
 export async function collectCandidates(settings, report, now = new Date(), read = fetchSource) {
   const items = [];
   await Promise.all(activeSources(settings).map(async source => {
-    try { const { text } = await read(source.url, source); const entries = parseFeed(text, source); items.push(...entries); report.push({ source: source.name, stage: 'rss', status: 'ok', count: entries.length }); }
-    catch (error) { report.push({ source: source.name, stage: 'rss', status: 'failed', message: error.message.slice(0, 180) }); }
+    const urls = [source.url, ...(source.fallbackUrls || [])];
+    for (const url of urls) {
+      try {
+        const { text } = await read(url, source); const entries = parseFeed(text, source); items.push(...entries);
+        const recentCount = entries.filter(item => { const age = now.getTime() - new Date(item.publishedAt).getTime(); return age >= -300000 && age <= settings.windowHours * 3600000; }).length;
+        const newestAt = entries.map(item => item.publishedAt).sort().at(-1);
+        report.push({ source: source.name, stage: 'rss', status: 'ok', count: entries.length, recentCount, feedUrl: url, ...(newestAt ? { newestAt } : {}), ...(recentCount ? {} : { message: 'Feed terbaca, tetapi tidak ada entri dalam rentang waktu yang dipilih.' }) });
+        if (recentCount) break;
+      } catch (error) { report.push({ source: source.name, feedUrl: url, stage: 'rss', status: 'failed', message: error.message.slice(0, 180) }); }
+    }
   }));
   return selectCandidates(items, settings, now);
 }

@@ -2,7 +2,7 @@ export const BOT_CATEGORIES = { ai: 'AI', technology: 'Teknologi', programming: 
 export const BOT_REGIONS = { ID: 'Indonesia', GLOBAL: 'Global' };
 // Fixed catalog: client settings never become arbitrary server-side fetch URLs.
 export const RSS_SOURCES = [
-  { id: 'antara', name: 'ANTARA Tekno', publisher: 'antara', region: 'ID', url: 'https://www.antaranews.com/rss/tekno.xml', hosts: ['www.antaranews.com', 'antaranews.com'] },
+  { id: 'antara', name: 'ANTARA Tekno', publisher: 'antara', region: 'ID', url: 'https://www.antaranews.com/rss/tekno.xml', fallbackUrls: ['https://www.antaranews.com/rss/terkini.xml'], hosts: ['www.antaranews.com', 'antaranews.com'] },
   { id: 'cnn', name: 'CNN Indonesia Teknologi', publisher: 'ctcorp', region: 'ID', url: 'https://www.cnnindonesia.com/teknologi/rss', hosts: ['www.cnnindonesia.com', 'cnnindonesia.com'] },
   { id: 'cnbc', name: 'CNBC Indonesia Tech', publisher: 'ctcorp', region: 'ID', url: 'https://www.cnbcindonesia.com/tech/rss', hosts: ['www.cnbcindonesia.com', 'cnbcindonesia.com'] },
   { id: 'techcrunch', name: 'TechCrunch', publisher: 'techcrunch', region: 'GLOBAL', url: 'https://techcrunch.com/feed/', hosts: ['techcrunch.com', 'www.techcrunch.com'] },

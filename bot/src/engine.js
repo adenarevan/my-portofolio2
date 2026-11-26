@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue, Timestamp } from './store.js';
-import { collectCandidates, readableSources, hash, sameTopic, titleTokens } from './sources.js';
+import { collectCandidates, readableSources, hash, sameTopic, titleTokens, noCandidateMessage } from './sources.js';
 import { DEFAULT_BOT_SETTINGS, scheduledSlot, validateSettings } from './botConfig.js';
 import { articleToPost } from './writer.js';
 
@@ -98,7 +98,7 @@ export function createBotRunner({ db, workerId, generate, collect = collectCandi
       const failures = items.filter(item => item.status === 'failed').length;
       if (created) { status = failures ? 'partial' : 'created'; message = `${created} draf dibuat. Tinjau di editor sebelum diterbitkan.`; }
       else if (failures || diagnostics.filter(item => item.stage === 'rss' && item.status === 'ok').length === 0) { status = 'failed'; message = failures ? 'Penulisan gagal. Lihat rincian dan coba lagi.' : 'Semua feed gagal dibaca. Coba lagi nanti.'; }
-      else message = discovery.candidates.length ? 'Tidak ada topik baru dengan bahan sumber yang cukup.' : 'Tidak ada topik yang memenuhi kategori, wilayah, kebaruan, dan dua penerbit independen.';
+      else message = discovery.candidates.length ? 'Tidak ada topik baru dengan bahan sumber yang cukup.' : noCandidateMessage(stats, settings);
     } catch (error) { status = 'failed'; message = error.message.slice(0, 240); }
     await db.runTransaction(async tx => {
       const [lock, record] = await Promise.all([tx.get(lockRef), tx.get(runRef)]);
