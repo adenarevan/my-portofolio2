@@ -160,6 +160,14 @@ service cloud.firestore {
       allow create: if isBotWorker() && request.resource.data.createdAt == request.time;
       allow update, delete: if false;
     }
+    match /portfolioBotSourceCache/{id} {
+      allow get: if isBotWorker();
+      allow create, update: if isBotWorker() && id in ['antara', 'cnn', 'cnbc', 'techcrunch', 'verge', 'antara-news', 'cnn-news', 'cnbc-news']
+        && request.resource.data.keys().hasOnly(['items', 'updatedAt'])
+        && request.resource.data.items is list && request.resource.data.items.size() <= 150
+        && request.resource.data.updatedAt == request.time;
+      allow list, delete: if false;
+    }
     // Preserve the existing project's default denial for other collections.
     match /{document=**} {
       allow read, write: if false;

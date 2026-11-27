@@ -186,4 +186,9 @@ test('Rules do not grant access to any unrelated collection', async () => {
   const db = environment.authenticatedContext('owner').firestore();
   await assertFails(setDoc(doc(db, 'unrelated', 'data'), { value: true }));
   await assertFails(getDoc(doc(db, 'unrelated', 'data')));
+  await assertFails(getDoc(doc(db, 'portfolioBotSourceCache', 'antara-news')));
+  await assertFails(setDoc(doc(db, 'portfolioBotSourceCache', 'antara-news'), { items: [], updatedAt: serverTimestamp() }));
+  const worker = environment.authenticatedContext('worker').firestore();
+  await assertSucceeds(setDoc(doc(worker, 'portfolioBotSourceCache', 'antara-news'), { items: [], updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(worker, 'portfolioBotSourceCache', 'arbitrary-host'), { items: [], updatedAt: serverTimestamp() }));
 });

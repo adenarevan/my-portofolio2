@@ -65,7 +65,11 @@ export function createBotRunner({ db, workerId, generate, collect = collectCandi
     try {
       const authorId = autoPublish ? stored?.authorId : trigger === 'manual' ? uid : stored?.authorId;
       await requireAdmin(db, authorId);
-      const discovery = await collect(settings, diagnostics, started); stats = discovery.stats;
+      const cache = {
+        read: async id => (await db.collection('portfolioBotSourceCache').doc(id).get()).data()?.items || [],
+        write: (id, entries) => db.collection('portfolioBotSourceCache').doc(id).set({ items: entries, updatedAt: FieldValue.serverTimestamp() }),
+      };
+      const discovery = await collect(settings, diagnostics, started, undefined, cache); stats = discovery.stats;
       const [historySnapshot, postsSnapshot] = await Promise.all([
         db.collection(BOT_COLLECTIONS.topics).get(), db.collection('portfolioPosts').select('title', 'slug', 'sources').get(),
       ]);

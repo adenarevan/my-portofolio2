@@ -51,6 +51,20 @@ test('ANTARA post-content is readable and another article from a failed publishe
   assert.equal(sources.length, 2);
   assert.ok(sources.every(s => s.material === 'article'));
 });
+test('Rotating feeds retain recent candidates across ticks, apply freshness and keep publishers independent', async () => {
+  const saved = new Map();
+  const cache = { read: async id => saved.get(id), write: async (id, items) => saved.set(id, items) };
+  const settings = { ...DEFAULT_BOT_SETTINGS, sourceIds: ['antara-news', 'cnn-news'] };
+  const rss = item => `<rss><channel><item><title>${item.title}</title><link>${item.url}</link><pubDate>${date.toUTCString()}</pubDate><description>${item.summary}</description></item></channel></rss>`;
+  const empty = { text: '<rss><channel></channel></rss>' };
+  const a = await collectCandidates(settings, [], date, async (_, s) => s.id === 'antara-news' ? { text: rss(sourceItems[0]) } : empty, cache);
+  assert.equal(a.candidates.length, 0);
+  const b = await collectCandidates(settings, [], date, async (_, s) => s.id === 'cnn-news' ? { text: rss(sourceItems[1]) } : empty, cache);
+  assert.equal(b.candidates.length, 1);
+  const expired = await collectCandidates(settings, [], new Date(date.getTime() + 25 * 3600000), async () => empty, cache);
+  assert.equal(expired.candidates.length, 0);
+  assert.ok([...saved.values()].every(items => items.length <= 150));
+});
 test('Settings validate category, region, timezone, article bound and independent publishers', () => {
   assert.deepEqual(validateSettings(DEFAULT_BOT_SETTINGS), DEFAULT_BOT_SETTINGS);
   for (const override of [{ categories: [] }, { region: 'bogus' }, { timeZone: 'UTC' }, { time: '25:00' }, { maxArticles: 50 }, { sourceIds: ['cnn', 'cnbc'] }, { apiKey: 'forbidden' }]) assert.throws(() => validateSettings({ ...DEFAULT_BOT_SETTINGS, ...override }));

@@ -127,6 +127,8 @@ Verifikasi mencakup Gemini request/schema/429, jadwal dinamis, filter dan consen
 
 ## Publikasi otomatis harian
 
+Kandidat RSS disimpan terbatas dalam `portfolioBotSourceCache/{sourceId}` agar liputan yang bergiliran keluar dari feed masih dapat dipasangkan pada eksekusi berikutnya. Batas 150 entri per sumber, ringkasan 1.800 karakter, dan umur simpan maksimal 168 jam; filter rentang tren admin (default 24 jam) tetap diterapkan sebelum pemilihan. Hanya worker yang dapat membaca/menulis cache, tanpa akses pengunjung atau perubahan ke collection lain. Cache bukan sumber baru dan tidak menambah jumlah penerbit independen. Isi artikel tetap diambil dari halaman sumber atau ringkasan RSS yang cukup panjang.
+
 - Admin memilih **Semua kategori**, Global, target **2 artikel per hari**, maksimum **2 per eksekusi**, mulai **08.00 WIB**, seluruh hari. Aktifkan kedua opsi jadwal dan publikasi otomatis.
 - Katalog diperluas dengan ANTARA Terkini, CNN Indonesia Berita (nasional, ekonomi, internasional, olahraga, hiburan dan gaya hidup), serta CNBC News/Market. Semua URL tetap ditetapkan di server. CNN/CNBC tetap satu grup dan feed tambahan ANTARA tetap satu grup. Feed yang diblokir, tidak valid, atau basi tidak dijadikan bahan berita baru.
 - Parser membaca `.post-content` ANTARA sebelum container generik. Jika satu halaman dalam grup penerbit gagal, halaman lain dari penerbit yang sama masih dapat dicoba. Harus ada bahan terbaca dari dua grup penerbit sebelum AI dipanggil. Tidak ada pelonggaran syarat sumber demi mengejar angka.

@@ -105,18 +105,34 @@ export function noCandidateMessage(stats, settings) {
   return `${stats.eligible} berita sesuai filter ${scope}, tetapi belum ada satu kejadian yang didukung dua penerbit independen. Tidak ada draf dibuat.`;
 }
 
-export async function collectCandidates(settings, report, now = new Date(), read = fetchSource) {
+export async function collectCandidates(settings, report, now = new Date(), read = fetchSource, cache = null) {
   const items = [];
   await Promise.all(activeSources(settings).map(async source => {
+    let previous = [];
+    if (cache) {
+      try { previous = await cache.read(source.id) || []; }
+      catch (error) { report.push({ source: source.name, stage: 'cache', status: 'failed', message: error.message.slice(0, 180) }); }
+    }
+    const fresh = [];
     const urls = [source.url, ...(source.additionalUrls || []), ...(source.fallbackUrls || [])];
     for (const url of urls) {
       try {
-        const { text } = await read(url, source); const entries = parseFeed(text, source); items.push(...entries);
+        const { text } = await read(url, source); const entries = parseFeed(text, source); fresh.push(...entries);
         const recentCount = entries.filter(item => { const age = now.getTime() - new Date(item.publishedAt).getTime(); return age >= -300000 && age <= settings.windowHours * 3600000; }).length;
         const newestAt = entries.map(item => item.publishedAt).sort().at(-1);
         report.push({ source: source.name, stage: 'rss', status: 'ok', count: entries.length, recentCount, feedUrl: url, ...(newestAt ? { newestAt } : {}), ...(recentCount ? {} : { message: 'Feed terbaca, tetapi tidak ada entri dalam rentang waktu yang dipilih.' }) });
         if (recentCount && !source.additionalUrls?.length) break;
       } catch (error) { report.push({ source: source.name, feedUrl: url, stage: 'rss', status: 'failed', message: error.message.slice(0, 180) }); }
+    }
+    const retained = [...new Map([...previous, ...fresh].filter(item => {
+      const age = now.getTime() - Date.parse(item.publishedAt);
+      return item.sourceId === source.id && canonicalUrl(item.url, source) && age >= -300000 && age <= 168 * 3600000;
+    }).map(item => [item.url, item])).values()].sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)).slice(0, 150);
+    // Without a cache preserve the original diagnostics semantics for direct callers.
+    items.push(...(cache ? retained : fresh));
+    if (cache) {
+      try { await cache.write(source.id, retained.map(item => ({ ...item, summary: item.summary.slice(0, 1800) }))); }
+      catch (error) { report.push({ source: source.name, stage: 'cache', status: 'failed', message: error.message.slice(0, 180) }); }
     }
   }));
   return selectCandidates(items, settings, now);
