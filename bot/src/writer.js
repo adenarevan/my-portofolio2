@@ -1,5 +1,6 @@
 import { BOT_CATEGORIES } from './botConfig.js';
 import { defaultArticleImage, normalizeArticleImage } from '../../src/lib/articleMedia.js';
+import { postSearchTokens } from '../../src/lib/blogSearch.js';
 
 const string = { type: 'string' };
 export function articleSchema(ids) {
@@ -70,6 +71,7 @@ export function articleToPost(article, sources, category) {
   content.push({ type: 'heading', attrs: { level: 2 }, content: [textNode('Sumber')] }, { type: 'bulletList', content: references.map(source => ({ type: 'listItem', content: [{ type: 'paragraph', content: [link(source)] }] })) });
   const body = `tiptap:v1:${JSON.stringify({ type: 'doc', content })}`;
   if (body.length > 50000) throw new Error('Artikel AI melebihi batas editor.');
-  return { title: article.title.trim(), slug: article.slug, excerpt: article.excerpt.trim(), metaDescription: article.metaDescription.trim(), body, tag: BOT_CATEGORIES[category] || 'Teknologi', status: 'draft', publishedAt: null,
+  const tag = BOT_CATEGORIES[category] || 'Teknologi';
+  return { title: article.title.trim(), searchTokens: postSearchTokens({ title: article.title, tag }), slug: article.slug, excerpt: article.excerpt.trim(), metaDescription: article.metaDescription.trim(), body, tag, status: 'draft', publishedAt: null,
     sources: references.map(({ title, url, sourceName, publishedAt, material }) => ({ title, url, publisher: sourceName, publishedAt, material })) };
 }

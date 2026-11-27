@@ -30,7 +30,8 @@ service cloud.firestore {
     function isValidPortfolioPost() {
       let p = request.resource.data;
       return p.keys().hasAll(['title', 'excerpt', 'body', 'tag', 'status', 'authorId', 'createdAt', 'updatedAt', 'publishedAt'])
-        && p.keys().hasOnly(['title', 'excerpt', 'body', 'tag', 'status', 'authorId', 'createdAt', 'updatedAt', 'publishedAt', 'slug', 'metaDescription', 'sources', 'bot'])
+        && p.keys().hasOnly(['title', 'excerpt', 'body', 'tag', 'status', 'authorId', 'createdAt', 'updatedAt', 'publishedAt', 'slug', 'metaDescription', 'sources', 'bot', 'searchTokens'])
+        && (!('searchTokens' in p) || (p.searchTokens is list && p.searchTokens.size() <= 240))
         && p.title is string && p.title.size() > 0 && p.title.size() <= 140
         && p.body is string && p.body.size() > 0 && p.body.size() <= 50000
         && p.excerpt is string && p.excerpt.size() <= 320
@@ -50,6 +51,15 @@ service cloud.firestore {
     match /portfolioBotWorkers/{uid} {
       allow get: if request.auth != null && request.auth.uid == uid;
       allow list, write: if false;
+    }
+    match /portfolioBlogTopics/{id} {
+      allow get: if id == 'main';
+      allow create, update: if id == 'main' && (isPortfolioBlogAdmin() || isBotWorker())
+        && request.resource.data.keys().hasOnly(['tags', 'updatedAt'])
+        && request.resource.data.tags is list && request.resource.data.tags.size() <= 200
+        && request.resource.data.tags.size() == request.resource.data.tags.toSet().size()
+        && request.resource.data.updatedAt == request.time;
+      allow list, delete: if false;
     }
     match /portfolioPosts/{postId} {
       allow get: if isPortfolioBlogAdmin() || isBotWorker() || resource.data.status == 'published';

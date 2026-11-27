@@ -113,6 +113,7 @@ export function createBotRunner({ db, workerId, generate, collect = collectCandi
             if (topic.exists || existing.exists) throw new Error('Draf topik ini sudah ada; tidak dibuat ulang.');
             tx.create(postRef, { ...data, authorId, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), bot: { runId, topicKey, workerId, selectionReason: reason, provider: 'rss', model, generatedAt: FieldValue.serverTimestamp(), ...(autoPublish ? { publicationDay: day } : {}) } });
             tx.create(topicRef, { tokens: candidate.tokens, urls: sources.map(source => source.url), postId, runId, createdAt: FieldValue.serverTimestamp() });
+            if (autoPublish && data.tag) tx.set(db.collection('portfolioBlogTopics').doc('main'), { tags: FieldValue.arrayUnion(data.tag), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
             // Persist result atomically with the draft so a crash still leaves a trace.
             tx.update(runRef, { items: FieldValue.arrayUnion({ status: autoPublish ? 'published' : 'created', title: data.title, postId, reason }) });
           });

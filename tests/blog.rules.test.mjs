@@ -133,6 +133,11 @@ test('Visitors can read only published posts and bounded published queries', asy
   assert.equal(result.size, 1);
   await assertFails(getDocs(query(collection(db, 'portfolioPosts'), limit(9))));
   await assertFails(getDocs(query(collection(db, 'portfolioPosts'), where('status', '==', 'published'), limit(21))));
+  const owner = environment.authenticatedContext('owner').firestore();
+  await assertSucceeds(updateDoc(doc(owner, 'portfolioPosts', 'public'), { searchTokens: ['catatan', 'cat'], updatedAt: serverTimestamp() }));
+  const search = await assertSucceeds(getDocs(query(collection(db, 'portfolioPosts'), where('status', '==', 'published'), where('searchTokens', 'array-contains-any', ['cat']), orderBy('publishedAt', 'desc'), limit(10))));
+  assert.equal(search.size, 1);
+  await assertFails(getDocs(query(collection(db, 'portfolioPosts'), where('searchTokens', 'array-contains-any', ['cat']), limit(10))));
 });
 
 test('Visitors and ordinary signed-in users cannot write, delete, or grant editor access', async () => {
@@ -191,4 +196,7 @@ test('Rules do not grant access to any unrelated collection', async () => {
   const worker = environment.authenticatedContext('worker').firestore();
   await assertSucceeds(setDoc(doc(worker, 'portfolioBotSourceCache', 'antara-news'), { items: [], updatedAt: serverTimestamp() }));
   await assertFails(setDoc(doc(worker, 'portfolioBotSourceCache', 'arbitrary-host'), { items: [], updatedAt: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(db, 'portfolioBlogTopics', 'main'), { tags: ['Sains', 'Olahraga'], updatedAt: serverTimestamp() }));
+  await assertSucceeds(getDoc(doc(environment.unauthenticatedContext().firestore(), 'portfolioBlogTopics', 'main')));
+  await assertFails(setDoc(doc(environment.unauthenticatedContext().firestore(), 'portfolioBlogTopics', 'main'), { tags: ['forged'], updatedAt: serverTimestamp() }));
 });

@@ -59,6 +59,8 @@ Fitur **Bot Artikel Trending** tersedia di menu admin `/admin/bot`. Versi gratis
 
 Menu **Blog** membuka `/blog`. Pengunjung dapat membaca artikel di `/blog/:id`; tiga tulisan terbit terbaru juga tampil di halaman depan. `/login` memakai Firebase Authentication (email/kata sandi), sedangkan `/admin` menyediakan judul, topik, ringkasan opsional, isi, pratinjau, draf, publikasi, penarikan artikel, dan penghapusan dengan konfirmasi.
 
+Arsip blog kini memiliki pencarian judul/topik, filter topik, dan sembilan artikel per halaman dengan cursor yang stabil. Pendamping halaman artikel menampilkan profil/topik di kiri serta daftar isi/tulisan terbaru di kanan; HP memakai satu kolom dan arsip ringkas. Indeks pencarian diperbarui saat menulis manual maupun melalui bot. Lihat [arsitektur, migrasi dan verifikasi arsip](docs/blog-archive.md).
+
 Isi tulisan memakai [Tiptap](https://tiptap.dev/docs/editor/getting-started/install/react), dengan heading, ukuran teks 12–48 px, tebal, miring, garis bawah, coret, daftar poin/nomor, kutipan, perataan, tautan, hapus format, undo/redo, dan shortcut keyboard. Format tampil di pratinjau serta artikel publik. Ringkasan otomatis dan waktu baca dihitung dari teks yang terlihat.
 
 Tombol **Gambar** memilih foto bawaan atau URL HTTPS, beserta deskripsi aksesibilitas, caption dan kredit sumber. Posisi bisa sebagai sampul atau di kursor. Gambar tersimpan sebagai node Tiptap dalam `body` yang sama; tidak membutuhkan Firebase Storage, perubahan rules, atau migrasi artikel. Mengganti foto bawaan dengan URL lain membersihkan kredit bawaan agar tidak salah atribusi. URL executable/data/local-network ditolak. Foto gagal dimuat mendapat sampul cadangan lokal; artikel teks lama tetap terbaca.

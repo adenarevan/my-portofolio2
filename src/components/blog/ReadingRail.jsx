@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 
-export default function ReadingRail({ headings, bodyRef, t }) {
+export default function ReadingRail({ headings, bodyRef, t, children }) {
   const [progress, setProgress] = useState(0);
   const [active, setActive] = useState('');
   useEffect(() => {
@@ -28,6 +28,7 @@ export default function ReadingRail({ headings, bodyRef, t }) {
   return <aside className="article-rail">
     <div className="reading-progress" role="progressbar" aria-label={t.progress} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ transform: `scaleX(${progress / 100})` }} /></div>
     {headings.length > 1 && <><nav className="article-contents-desktop" aria-label={t.contents}><p>{t.contents}</p>{links}</nav><details className="article-contents-mobile"><summary>{t.contents}</summary><nav aria-label={t.contents}>{links}</nav></details></>}
+    <div className="article-rail-extras">{children}</div>
   </aside>;
 }
-ReadingRail.propTypes = { headings: PropTypes.array.isRequired, bodyRef: PropTypes.object.isRequired, t: PropTypes.object.isRequired };
+ReadingRail.propTypes = { headings: PropTypes.array.isRequired, bodyRef: PropTypes.object.isRequired, t: PropTypes.object.isRequired, children: PropTypes.node };

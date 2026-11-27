@@ -35,7 +35,7 @@ export class FirestoreStore {
   runTransaction(callback) {
     return runTransaction(this.firestore, transaction => callback({
       get: async reference => snapshot(await transaction.get(reference.reference), this),
-      set: (reference, data) => transaction.set(reference.reference, data),
+      set: (reference, data, options) => options ? transaction.set(reference.reference, data, options) : transaction.set(reference.reference, data),
       // Callers read and check non-existence before create; retries recheck that read.
       create: (reference, data) => transaction.set(reference.reference, data),
       update: (reference, data) => transaction.update(reference.reference, data),
