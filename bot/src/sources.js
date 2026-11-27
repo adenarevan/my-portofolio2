@@ -8,6 +8,11 @@ const words = {
   ai: /\b(ai|artificial intelligence|kecerdasan buatan|openai|chatgpt|gpt|gemini|claude|anthropic|llm|deepseek)\b/i,
   technology: /\b(teknologi|technology|digital|internet|software|perangkat|chip|smartphone|apple|google|microsoft|nvidia|samsung|siber|cyber|data|robot|gadget)\b/i,
   programming: /\b(pemrograman|programming|pengembang|developer|coding|javascript|typescript|python|react|github|database|api|node[ .]js|open source|perangkat lunak)\b/i,
+  news: /\b(pemerintah|presiden|menteri|politik|negara|pemilu|dpr|trump|prabowo|president|election|government|parliament|perang|war|diplomasi)\b/i,
+  business: /\b(ekonomi|bisnis|saham|rupiah|dolar|emas|bank|pasar|minyak|ekspor|impor|tarif|economy|business|market|stock|oil|trade|tariff|inflasi|investasi)\b/i,
+  sports: /\b(olahraga|timnas|sepak bola|liga|piala|fifa|sport|football|soccer|league|cup|badminton|balap|motogp|f1)\b/i,
+  science: /\b(sains|science|penelitian|research|studi|study|kesehatan|health|obat|vaksin|medis|nasa|angkasa|space|iklim|climate)\b/i,
+  entertainment: /\b(hiburan|film|musik|artis|konser|wisata|kuliner|gaya hidup|entertainment|movie|music|concert|travel|lifestyle|fashion)\b/i,
 };
 const stops = new Set('yang dan di ke dari untuk dengan ini itu pada dalam atau bisa akan baru model rilis luncurkan meluncurkan hadir kenalkan perkenalkan diluncurkan resmi the a an to of in for on with new launches launch release releases announces announced is its and ai teknologi technology update terbaru'.split(' '));
 export const titleTokens = title => [...new Set((title.toLowerCase().normalize('NFKD').match(/[a-z0-9]+(?:[.-][a-z0-9]+)*/g) || []).filter(word => word.length > 1 && !stops.has(word)))].sort();
@@ -76,7 +81,8 @@ export function selectCandidates(items, settings, now = new Date()) {
     const age = now.getTime() - new Date(item.publishedAt).getTime();
     if (age < -300000 || age > settings.windowHours * 3600000) { stats.stale++; continue; }
     if (settings.region !== 'GLOBAL' && item.region !== settings.region) { stats.region++; continue; }
-    const categories = settings.categories.filter(category => words[category]?.test(`${item.title} ${item.summary}`));
+    const detected = Object.keys(words).filter(category => words[category].test(`${item.title} ${item.summary}`));
+    const categories = settings.categories.includes('all') ? (detected.length ? detected : ['news']) : detected.filter(category => settings.categories.includes(category));
     if (!categories.length) { stats.category++; continue; }
     if (seen.has(item.url)) { stats.repeatedUrl++; continue; } seen.add(item.url);
     stats.eligible++; publishers.add(item.publisher);
@@ -102,14 +108,14 @@ export function noCandidateMessage(stats, settings) {
 export async function collectCandidates(settings, report, now = new Date(), read = fetchSource) {
   const items = [];
   await Promise.all(activeSources(settings).map(async source => {
-    const urls = [source.url, ...(source.fallbackUrls || [])];
+    const urls = [source.url, ...(source.additionalUrls || []), ...(source.fallbackUrls || [])];
     for (const url of urls) {
       try {
         const { text } = await read(url, source); const entries = parseFeed(text, source); items.push(...entries);
         const recentCount = entries.filter(item => { const age = now.getTime() - new Date(item.publishedAt).getTime(); return age >= -300000 && age <= settings.windowHours * 3600000; }).length;
         const newestAt = entries.map(item => item.publishedAt).sort().at(-1);
         report.push({ source: source.name, stage: 'rss', status: 'ok', count: entries.length, recentCount, feedUrl: url, ...(newestAt ? { newestAt } : {}), ...(recentCount ? {} : { message: 'Feed terbaca, tetapi tidak ada entri dalam rentang waktu yang dipilih.' }) });
-        if (recentCount) break;
+        if (recentCount && !source.additionalUrls?.length) break;
       } catch (error) { report.push({ source: source.name, feedUrl: url, stage: 'rss', status: 'failed', message: error.message.slice(0, 180) }); }
     }
   }));
@@ -121,18 +127,21 @@ export async function readableSources(candidate, report, read = fetchSource) {
   const ordered = [...candidate.items].sort((a, b) => candidate.items.filter(item => item.publisher === a.publisher).length - candidate.items.filter(item => item.publisher === b.publisher).length);
   const seen = new Set();
   for (const item of ordered) {
-    if (seen.has(item.publisher)) continue; seen.add(item.publisher);
+    if (seen.has(item.publisher)) continue;
     if (sources.length === 3) break;
     let text = item.summary; let material = 'rss-summary';
     const source = activeSources({ sourceIds: [item.sourceId], region: 'GLOBAL' })[0];
     try {
       const response = await read(item.url, source);
       const $ = load(response.text); $('script,style,nav,footer,header,aside,form,button,noscript,.ads,.advertisement').remove();
-      const root = $('article, [itemprop="articleBody"], .detail__body-text, .read__content, main').first();
-      const article = root.find('p').map((_, element) => $(element).text().trim()).get().filter(text => text.length > 50).join('\n');
+      // Prefer the actual article body before generic containers; ANTARA uses post-content.
+      const root = $('[itemprop="articleBody"], .post-content, .detail__body-text, .read__content').first();
+      const body = root.length ? root : $('article, main').first();
+      const article = body.find('p').map((_, element) => $(element).text().trim()).get().filter(text => text.length > 50).join('\n');
       if (article.length >= 350) { text = article; material = 'article'; }
     } catch (error) { report.push({ source: item.sourceName, url: item.url, stage: 'article', status: 'failed', message: error.message.slice(0, 180) }); }
     if (text.length < 180) { report.push({ source: item.sourceName, url: item.url, stage: 'article', status: 'skipped', message: 'Bahan terbaca terlalu singkat (kurang dari 180 karakter).' }); continue; }
+    seen.add(item.publisher);
     sources.push({ ...item, id: `S${sources.length + 1}`, text: text.slice(0, 4000), material });
   }
   return sources;

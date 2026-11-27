@@ -14,6 +14,19 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/portfolioBlogAdmins/$(request.auth.uid))
         && get(/databases/$(database)/documents/portfolioBlogAdmins/$(request.auth.uid)).data.enabled == true;
     }
+    function todayKey() {
+      let local = request.time + duration.value(7, 'h');
+      return string(local.year()) + '-' + string(local.month()) + '-' + string(local.day());
+    }
+    function autoPublication(postId) {
+      let settings = get(/databases/$(database)/documents/portfolioBotSettings/main).data;
+      let daily = getAfter(/databases/$(database)/documents/portfolioBotDaily/$(todayKey())).data;
+      return settings.enabled == true && settings.get('autoPublish', false) == true
+        && request.resource.data.authorId == settings.authorId
+        && request.resource.data.publishedAt == request.time
+        && request.resource.data.bot.publicationDay == todayKey()
+        && daily.postIds.hasAny([postId]) && daily.postIds.size() <= settings.get('dailyTarget', 2);
+    }
     function isValidPortfolioPost() {
       let p = request.resource.data;
       return p.keys().hasAll(['title', 'excerpt', 'body', 'tag', 'status', 'authorId', 'createdAt', 'updatedAt', 'publishedAt'])
@@ -47,7 +60,8 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && (request.resource.data.publishedAt == null || request.resource.data.publishedAt == request.time))
         || (isBotWorker() && isValidPortfolioPost()
-          && request.resource.data.status == 'draft' && request.resource.data.publishedAt == null
+          && ((request.resource.data.status == 'draft' && request.resource.data.publishedAt == null)
+            || (request.resource.data.status == 'published' && autoPublication(postId)))
           && request.resource.data.createdAt == request.time
           && adminUid(request.resource.data.authorId)
           && request.resource.data.bot.workerId == request.auth.uid
@@ -67,15 +81,16 @@ service cloud.firestore {
     function validBotSettings() {
       let p = request.resource.data;
       return p.keys().hasAll(['enabled', 'categories', 'region', 'windowHours', 'time', 'timeZone', 'days', 'maxArticles', 'sourceIds', 'authorId', 'revision', 'updatedBy', 'updatedAt'])
-        && p.keys().hasOnly(['enabled', 'categories', 'region', 'windowHours', 'time', 'timeZone', 'days', 'maxArticles', 'sourceIds', 'authorId', 'revision', 'updatedBy', 'updatedAt'])
+        && p.keys().hasOnly(['enabled', 'autoPublish', 'dailyTarget', 'categories', 'region', 'windowHours', 'time', 'timeZone', 'days', 'maxArticles', 'sourceIds', 'authorId', 'revision', 'updatedBy', 'updatedAt'])
+        && p.get('autoPublish', false) is bool && p.get('dailyTarget', 2) is int && p.get('dailyTarget', 2) >= 1 && p.get('dailyTarget', 2) <= 3
         && p.enabled is bool && p.region in ['ID', 'GLOBAL'] && p.windowHours in [6, 12, 24, 72, 168]
-        && p.categories is list && p.categories.size() > 0 && p.categories.size() == p.categories.toSet().size() && p.categories.hasOnly(['ai', 'technology', 'programming'])
+        && p.categories is list && p.categories.size() > 0 && p.categories.size() == p.categories.toSet().size() && p.categories.hasOnly(['all', 'ai', 'technology', 'programming', 'news', 'business', 'sports', 'science', 'entertainment'])
         && p.time is string && p.time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$') && p.timeZone == 'Asia/Jakarta'
         && p.days is list && p.days.size() > 0 && p.days.size() == p.days.toSet().size() && p.days.hasOnly([0, 1, 2, 3, 4, 5, 6])
         && p.maxArticles is int && p.maxArticles >= 1 && p.maxArticles <= 3
-        && p.sourceIds is list && p.sourceIds.size() == p.sourceIds.toSet().size() && p.sourceIds.hasOnly(['antara', 'cnn', 'cnbc', 'techcrunch', 'verge'])
-        && (p.region == 'ID' ? p.sourceIds.hasAny(['antara']) && p.sourceIds.hasAny(['cnn', 'cnbc'])
-          : (p.sourceIds.hasAny(['antara']) ? 1 : 0) + (p.sourceIds.hasAny(['cnn', 'cnbc']) ? 1 : 0) + (p.sourceIds.hasAny(['techcrunch']) ? 1 : 0) + (p.sourceIds.hasAny(['verge']) ? 1 : 0) >= 2)
+        && p.sourceIds is list && p.sourceIds.size() == p.sourceIds.toSet().size() && p.sourceIds.hasOnly(['antara', 'cnn', 'cnbc', 'techcrunch', 'verge', 'antara-news', 'cnn-news', 'cnbc-news'])
+        && (p.region == 'ID' ? p.sourceIds.hasAny(['antara', 'antara-news']) && p.sourceIds.hasAny(['cnn', 'cnbc', 'cnn-news', 'cnbc-news'])
+          : (p.sourceIds.hasAny(['antara', 'antara-news']) ? 1 : 0) + (p.sourceIds.hasAny(['cnn', 'cnbc', 'cnn-news', 'cnbc-news']) ? 1 : 0) + (p.sourceIds.hasAny(['techcrunch']) ? 1 : 0) + (p.sourceIds.hasAny(['verge']) ? 1 : 0) >= 2)
         && p.authorId == request.auth.uid && p.updatedBy == request.auth.uid && p.updatedAt == request.time && p.revision is int;
     }
     match /portfolioBotSettings/{id} {
@@ -89,6 +104,26 @@ service cloud.firestore {
       allow list: if (isPortfolioBlogAdmin() && request.query.limit <= 10) || (isBotWorker() && request.query.limit <= 200);
       allow create, update: if isBotWorker();
       allow delete: if false;
+    }
+    match /portfolioBotDaily/{day} {
+      allow get: if isPortfolioBlogAdmin() || isBotWorker();
+      allow list, delete: if false;
+      allow create, update: if isBotWorker() && day == todayKey() && validDailyPublication();
+      function validDailyPublication() {
+        let p = request.resource.data;
+        let settings = get(/databases/$(database)/documents/portfolioBotSettings/main).data;
+        let previous = resource == null ? [] : resource.data.postIds;
+        let postId = p.postIds[p.postIds.size() - 1];
+        let post = getAfter(/databases/$(database)/documents/portfolioPosts/$(postId)).data;
+        return settings.enabled == true && settings.get('autoPublish', false) == true
+          && p.keys().hasOnly(['postIds', 'updatedAt']) && p.updatedAt == request.time
+          && p.postIds is list && p.postIds.size() == p.postIds.toSet().size()
+          && p.postIds.size() == previous.size() + 1 && p.postIds.hasAll(previous)
+          && p.postIds.size() <= settings.get('dailyTarget', 2)
+          && !exists(/databases/$(database)/documents/portfolioPosts/$(postId))
+          && post.status == 'published' && post.publishedAt == request.time
+          && post.bot.workerId == request.auth.uid && post.bot.publicationDay == todayKey();
+      }
     }
     function validQueuedRequest(uid) {
       let p = request.resource.data;

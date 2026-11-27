@@ -1,11 +1,18 @@
 import { collection, doc, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db, firebaseApp } from './firebase';
-import { validateSettings } from '../../bot/src/botConfig';
+import { jakartaDay, validateSettings } from '../../bot/src/botConfig';
 export { BOT_CATEGORIES, BOT_REGIONS, DEFAULT_BOT_SETTINGS, RSS_SOURCES } from '../../bot/src/botConfig';
 export const subscribeBotSettings = (onData, onError) => onSnapshot(doc(db, 'portfolioBotSettings', 'main'), snapshot => onData(snapshot.data() || null), onError);
 export const subscribeBotRuns = (onData, onError) => onSnapshot(query(collection(db, 'portfolioBotRuns'), orderBy('startedAt', 'desc'), limit(10)), snapshot => onData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))), onError);
 export const subscribeBotRequest = (uid, onData, onError) => onSnapshot(doc(db, 'portfolioBotRequests', uid), snapshot => onData(snapshot.data() || null), onError);
 export const subscribeBotStatus = (onData, onError) => onSnapshot(doc(db, 'portfolioBotStatus', 'runner'), snapshot => onData(snapshot.data() || null), onError);
+export function subscribeBotDaily(onData, onError) {
+  let day = jakartaDay();
+  const listen = () => onSnapshot(doc(db, 'portfolioBotDaily', day), snapshot => onData(snapshot.data() || null), onError);
+  let off = listen();
+  const timer = setInterval(() => { const next = jakartaDay(); if (next !== day) { day = next; off(); onData(null); off = listen(); } }, 60000);
+  return () => { clearInterval(timer); off(); };
+}
 export async function saveBotSettings(input, revision) {
   if (!auth.currentUser) throw new Error('Masuk sebagai admin terlebih dahulu.');
   const settings = validateSettings(input); const uid = auth.currentUser.uid;

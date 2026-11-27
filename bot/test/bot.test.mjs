@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
 import { FirestoreStore, FieldValue } from '../src/store.js';
-import { DEFAULT_BOT_SETTINGS, scheduledSlot, validateSettings, RSS_SOURCES } from '../src/botConfig.js';
+import { DEFAULT_BOT_SETTINGS, jakartaDay, scheduledSlot, validateSettings, RSS_SOURCES } from '../src/botConfig.js';
 import { canonicalUrl, parseFeed, selectCandidates, sameTopic, titleTokens, collectCandidates, readableSources, noCandidateMessage } from '../src/sources.js';
 import { articleToPost, validateArticle, writeArticle } from '../src/writer.js';
 import { BOT_COLLECTIONS, createBotRunner, updateBotSettings } from '../src/engine.js';
@@ -27,6 +27,30 @@ test('Defaults are disabled and Jakarta schedule reads changes without redeploy'
   assert.equal(scheduledSlot({ ...settings, days: [5] }, date), null);
   assert.equal(scheduledSlot(settings, new Date('2026-11-26T02:01:00Z')), null);
 });
+test('All categories admit general news; auto schedule catches up after the old one-hour window in WIB', () => {
+  assert.deepEqual(DEFAULT_BOT_SETTINGS.categories, ['all']);
+  assert.equal(DEFAULT_BOT_SETTINGS.autoPublish, false);
+  assert.equal(DEFAULT_BOT_SETTINGS.dailyTarget, 2);
+  const items = sourceItems.map(item => ({ ...item, title: 'Juventus menang atas Omonia Nicosia', summary: 'Hasil pertandingan liga.', tokens: titleTokens('Juventus menang atas Omonia Nicosia') }));
+  assert.equal(selectCandidates(items, DEFAULT_BOT_SETTINGS, date).candidates.length, 1);
+  assert.equal(selectCandidates(items, { ...DEFAULT_BOT_SETTINGS, categories: ['ai'] }, date).candidates.length, 0);
+  const settings = { ...DEFAULT_BOT_SETTINGS, enabled: true, autoPublish: true };
+  assert.equal(scheduledSlot(settings, new Date('2026-11-26T00:59:00Z')), null);
+  assert.equal(scheduledSlot(settings, new Date('2026-11-26T10:05:00Z')), 'scheduled-2026-11-26-17');
+  assert.equal(scheduledSlot(settings, new Date('2026-11-26T16:59:00Z')), 'scheduled-2026-11-26-23');
+  assert.equal(scheduledSlot(settings, new Date('2026-11-26T17:00:00Z')), null);
+  assert.equal(jakartaDay(new Date('2026-12-31T17:00:00Z')), '2027-1-1');
+});
+test('ANTARA post-content is readable and another article from a failed publisher can be tried', async () => {
+  const logs = [];
+  const first = { ...sourceItems[0], summary: '', url: sourceItems[0].url + '-unavailable' };
+  const sources = await readableSources({ ...candidate, items: [first, ...sourceItems] }, logs, async url => {
+    if (url.endsWith('-unavailable')) throw new Error('HTTP 503');
+    return { text: `<html><div class="post-content"><p>${'Bahan artikel independen yang dapat dibaca. '.repeat(12)}</p></div></html>` };
+  });
+  assert.equal(sources.length, 2);
+  assert.ok(sources.every(s => s.material === 'article'));
+});
 test('Settings validate category, region, timezone, article bound and independent publishers', () => {
   assert.deepEqual(validateSettings(DEFAULT_BOT_SETTINGS), DEFAULT_BOT_SETTINGS);
   for (const override of [{ categories: [] }, { region: 'bogus' }, { timeZone: 'UTC' }, { time: '25:00' }, { maxArticles: 50 }, { sourceIds: ['cnn', 'cnbc'] }, { apiKey: 'forbidden' }]) assert.throws(() => validateSettings({ ...DEFAULT_BOT_SETTINGS, ...override }));
@@ -44,7 +68,7 @@ test('RSS consensus filters category, region, recency and publisher ownership', 
   assert.equal(selectCandidates(sourceItems, DEFAULT_BOT_SETTINGS, date).candidates.length, 1);
   assert.equal(selectCandidates(sourceItems, { ...DEFAULT_BOT_SETTINGS, categories: ['programming'] }, date).candidates.length, 1); // pengembang
   assert.equal(selectCandidates(sourceItems.map(item => ({ ...item, title: 'Skor sepak bola', summary: 'Pertandingan liga nasional', tokens: ['liga', 'nasional'] })), { ...DEFAULT_BOT_SETTINGS, categories: ['ai'] }, date).candidates.length, 0);
-  assert.equal(selectCandidates(sourceItems.map(item => ({ ...item, region: 'GLOBAL' })), DEFAULT_BOT_SETTINGS, date).candidates.length, 0);
+  assert.equal(selectCandidates(sourceItems.map(item => ({ ...item, region: 'GLOBAL' })), { ...DEFAULT_BOT_SETTINGS, region: 'ID' }, date).candidates.length, 0);
   assert.equal(selectCandidates(sourceItems.map(item => ({ ...item, publisher: 'ctcorp' })), DEFAULT_BOT_SETTINGS, date).candidates.length, 0);
   assert.equal(selectCandidates(sourceItems, DEFAULT_BOT_SETTINGS, new Date(date.getTime() + 25 * 3600000)).candidates.length, 0);
   assert.ok(sameTopic(sourceItems[0].tokens, sourceItems[1].tokens));
@@ -53,7 +77,7 @@ test('RSS consensus filters category, region, recency and publisher ownership', 
 test('A failing feed is logged and a readable RSS summary can back up an unavailable article', async () => {
   const diagnostics = [];
   await collectCandidates(DEFAULT_BOT_SETTINGS, diagnostics, date, async () => { throw new Error('HTTP 503'); });
-  assert.equal(new Set(diagnostics.filter(item => item.status === 'failed').map(item => item.source)).size, 3);
+  assert.equal(new Set(diagnostics.filter(item => item.status === 'failed').map(item => item.source)).size, RSS_SOURCES.length);
   const sources = await readableSources(candidate, diagnostics, async () => { throw new Error('HTTP 403'); });
   assert.equal(sources.length, 2); assert.equal(sources[0].material, 'rss-summary');
 });
@@ -61,7 +85,7 @@ test('A failing feed is logged and a readable RSS summary can back up an unavail
 test('Stale ANTARA feed falls back to its official latest feed and reports freshness', async () => {
   const logs = [], urls = [];
   const xml = (item, time) => `<rss><channel><item><title>${item.title}</title><link>${item.url}</link><pubDate>${time.toUTCString()}</pubDate><description>${item.summary}</description></item></channel></rss>`;
-  const result = await collectCandidates(DEFAULT_BOT_SETTINGS, logs, date, async url => {
+  const result = await collectCandidates({ ...DEFAULT_BOT_SETTINGS, region: 'ID', sourceIds: ['antara', 'cnn', 'cnbc'] }, logs, date, async url => {
     urls.push(url);
     if (url.includes('antaranews.com/rss/tekno.xml')) return { text: xml(sourceItems[0], new Date(date.getTime() - 4 * 86400000)) };
     if (url.includes('antaranews.com/rss/terkini.xml')) return { text: xml(sourceItems[0], date) };
@@ -222,4 +246,50 @@ test('GitHub tick claims an admin request, runs the same engine and completes th
   await processBotTick({ db, workerId: 'worker', run });
   assert.equal((await db.collection('portfolioPosts').get()).size, 1);
   assert.equal((await db.collection(BOT_COLLECTIONS.status).doc('runner').get()).data().scheduler, 'github-actions');
+});
+
+const broadCandidates = ['Juventus menang atas Omonia Nicosia', 'Tim Freeport temukan kepiting Papua', 'Emas Antam menguat Jumat pagi'].map((title, index) => ({ title, tokens: titleTokens(title), categories: [index === 0 ? 'sports' : 'news'], items: sourceItems.map(s => ({ ...s, title, url: `${s.url}-daily-${index}` })) }));
+const autoOptions = (extra = {}) => ({ now: () => new Date(), collect: async (_, logs) => { logs.push({ stage: 'rss', status: 'ok' }); return { candidates: broadCandidates, stats: {} }; }, readSources: async c => c.items, generate: async c => ({ ...article, title: c.title, slug: c.title.toLowerCase().replaceAll(' ', '-') }), ...extra });
+const enableAuto = () => updateBotSettings(adminDb, 'owner', { ...DEFAULT_BOT_SETTINGS, enabled: true, autoPublish: true, time: '00:00' }, 0);
+
+test('Auto mode publishes exactly two readable public articles, caps manual/scheduled overlap and replays', { skip: !emulator }, async () => {
+  await enableAuto(); let calls = 0;
+  const options = autoOptions();
+  const run = fixtureRunner({ ...options, generate: async c => { calls++; return options.generate(c); } });
+  const results = await Promise.all([run(manual()), run({ trigger: 'scheduled' })]);
+  assert.ok(results.some(r => r.status === 'published'), JSON.stringify(results));
+  assert.equal(calls, 2);
+  const posts = await db.collection('portfolioPosts').get(); assert.equal(posts.size, 2);
+  for (const p of posts.docs) {
+    assert.equal(p.data().status, 'published'); assert.ok(p.data().publishedAt);
+    assert.equal(p.data().bot.publicationDay, jakartaDay());
+    assert.ok((await new FirestoreStore(environment.unauthenticatedContext().firestore()).collection('portfolioPosts').doc(p.id).get()).exists);
+  }
+  assert.equal((await db.collection(BOT_COLLECTIONS.daily).doc(jakartaDay()).get()).data().postIds.length, 2);
+  assert.equal((await run(manual('manual-another-123456'))).status, 'complete');
+  assert.equal((await run({ trigger: 'scheduled' })).status, 'complete'); assert.equal(calls, 2);
+});
+
+test('An empty morning or partial publication catches up in the next hourly slot without duplicating saved posts', { skip: !emulator }, async () => {
+  await enableAuto();
+  const current = new Date();
+  let hour = new Date(current.getTime()); hour.setUTCHours(2, 0, 0, 0);
+  const options = autoOptions(); let available = [];
+  const run = fixtureRunner({ ...options, now: () => hour, collect: async (_, logs) => { logs.push({ stage: 'rss', status: 'ok' }); return { candidates: available, stats: {} }; } });
+  assert.equal((await run({ trigger: 'scheduled' })).status, 'skipped');
+  available = broadCandidates.slice(0, 1); hour = new Date(hour.getTime() + 3600000);
+  assert.equal((await run({ trigger: 'scheduled' })).status, 'published');
+  assert.equal((await db.collection('portfolioPosts').get()).size, 1);
+  available = broadCandidates; hour = new Date(hour.getTime() + 3600000);
+  assert.equal((await run({ trigger: 'scheduled' })).status, 'published');
+  assert.equal((await db.collection('portfolioPosts').get()).size, 2);
+});
+
+test('Disabling automatic publication during generation prevents publication; manual drafts remain unchanged', { skip: !emulator }, async () => {
+  await enableAuto();
+  const result = await fixtureRunner(autoOptions({ generate: async c => { await updateBotSettings(adminDb, 'owner', { ...DEFAULT_BOT_SETTINGS, enabled: true, autoPublish: false, time: '00:00' }, 1); return { ...article, title: c.title }; } }))(manual());
+  assert.equal(result.status, 'failed'); assert.equal((await db.collection('portfolioPosts').get()).size, 0);
+  const draft = await fixtureRunner()(manual('draft-after-disable-123456'));
+  assert.equal(draft.status, 'created');
+  assert.equal((await db.collection('portfolioPosts').get()).docs[0].data().status, 'draft');
 });

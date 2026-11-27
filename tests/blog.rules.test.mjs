@@ -2,8 +2,8 @@ import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
-import { DEFAULT_BOT_SETTINGS } from '../bot/src/botConfig.js';
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { DEFAULT_BOT_SETTINGS, jakartaDay } from '../bot/src/botConfig.js';
 
 let environment;
 const date = Timestamp.fromDate(new Date('2026-11-26T00:00:00Z'));
@@ -80,7 +80,7 @@ test('Admins can save validated settings and enqueue one manual request without 
   await assertFails(setDoc(doc(environment.authenticatedContext('reader').firestore(), 'portfolioBotSettings', 'main'), payload));
 });
 
-test('Dedicated worker can create drafts and process queue but cannot publish, edit manual posts, or access BTC', async () => {
+test('Worker defaults to drafts and cannot publish without opt-in, edit manual posts, or access BTC', async () => {
   const worker = environment.authenticatedContext('worker').firestore();
   const topicKey = 'a'.repeat(32);
   const data = createPayload({ status: 'draft', publishedAt: null, sources: [{ title: 'S1' }, { title: 'S2' }], bot: { workerId: 'worker', topicKey, generatedAt: serverTimestamp() } });
@@ -95,6 +95,34 @@ test('Dedicated worker can create drafts and process queue but cannot publish, e
   await assertFails(setDoc(doc(worker, 'portfolioBlogAdmins', 'worker'), { enabled: true }));
   await assertFails(setDoc(doc(worker, 'portfolioBotSettings', 'main'), { enabled: true }));
   await assertFails(getDoc(doc(environment.authenticatedContext('reader').firestore(), 'portfolioPosts', `bot_${topicKey}`)));
+});
+
+test('Automatic publication requires admin opt-in and an atomic current-WIB-day ledger capped at two posts', async () => {
+  const owner = environment.authenticatedContext('owner').firestore();
+  const worker = environment.authenticatedContext('worker').firestore();
+  const day = jakartaDay();
+  const makePost = (key, publicationDay = day) => createPayload({ sources: [{ title: 'S1' }, { title: 'S2' }], bot: { workerId: 'worker', topicKey: key, generatedAt: serverTimestamp(), publicationDay } });
+  await assertSucceeds(setDoc(doc(owner, 'portfolioBotSettings', 'main'), { ...DEFAULT_BOT_SETTINGS, enabled: true, autoPublish: true, authorId: 'owner', updatedBy: 'owner', revision: 1, updatedAt: serverTimestamp() }));
+  const firstKey = 'c'.repeat(32), secondKey = 'd'.repeat(32), thirdKey = 'e'.repeat(32);
+  const first = `bot_${firstKey}`, second = `bot_${secondKey}`, third = `bot_${thirdKey}`;
+  await assertFails(setDoc(doc(worker, 'portfolioPosts', first), makePost(firstKey)));
+  const publish = (key, ids, publicationDay = day) => {
+    const batch = writeBatch(worker);
+    batch.set(doc(worker, 'portfolioPosts', `bot_${key}`), makePost(key, publicationDay));
+    batch.set(doc(worker, 'portfolioBotDaily', publicationDay), { postIds: ids, updatedAt: serverTimestamp() });
+    return batch.commit();
+  };
+  await assertFails(publish(firstKey, [first], '2000-1-1'));
+  await assertSucceeds(publish(firstKey, [first]));
+  await assertSucceeds(publish(secondKey, [first, second]));
+  await assertFails(publish(thirdKey, [first, second, third]));
+  await assertFails(publish(thirdKey, [third]));
+  await assertFails(setDoc(doc(worker, 'portfolioBotDaily', day), { postIds: [], updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(worker, 'portfolioPosts', first), { title: 'Worker rewrite', updatedAt: serverTimestamp() }));
+  await assertSucceeds(getDoc(doc(environment.unauthenticatedContext().firestore(), 'portfolioPosts', first)));
+  await assertFails(getDoc(doc(environment.unauthenticatedContext().firestore(), 'portfolioBotDaily', day)));
+  await assertSucceeds(updateDoc(doc(owner, 'portfolioBotSettings', 'main'), { autoPublish: false, revision: 2, updatedAt: serverTimestamp() }));
+  await assertFails(publish(thirdKey, [first, second, third]));
 });
 
 test('Visitors can read only published posts and bounded published queries', async () => {

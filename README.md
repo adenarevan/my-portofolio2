@@ -55,7 +55,7 @@ Font disimpan lokal. Lisensi SIL Open Font License tersedia di `public/fonts/OFL
 
 ## Blog dan editor Firebase
 
-Fitur **Bot Artikel Trending** tersedia di menu admin `/admin/bot`. Versi gratis memakai **Gemini + GitHub Actions + Firebase Spark** untuk menyiapkan draf dari konsensus RSS. Tombol manual masuk antrean yang diperiksa runner sekitar setiap 15 menit. Default jadwal nonaktif, Indonesia, 24 jam, kategori AI/teknologi/pemrograman, satu draf per hari pukul 08.00 WIB. Lihat [setup secret GitHub, akun bot terbatas, jadwal, sumber, dan pengujian](docs/trending-bot.md).
+Fitur **Bot Artikel Trending** tersedia di menu admin `/admin/bot`. Versi gratis memakai **Gemini + GitHub Actions + Firebase Spark** untuk membuat artikel dari konsensus RSS, dengan pilihan draf atau publikasi otomatis. Tombol manual masuk antrean yang diperiksa runner sekitar setiap 15 menit. Default instalasi nonaktif, Global, 24 jam, semua kategori, target dua artikel per hari mulai 08.00 WIB. Setelah publikasi otomatis diaktifkan admin, bot mencoba lagi setiap jam hingga target harian terpenuhi; manual dan jadwal berbagi kuota transaksi yang sama. Lihat [setup secret GitHub, akun bot terbatas, jadwal, sumber, dan pengujian](docs/trending-bot.md).
 
 Menu **Blog** membuka `/blog`. Pengunjung dapat membaca artikel di `/blog/:id`; tiga tulisan terbit terbaru juga tampil di halaman depan. `/login` memakai Firebase Authentication (email/kata sandi), sedangkan `/admin` menyediakan judul, topik, ringkasan opsional, isi, pratinjau, draf, publikasi, penarikan artikel, dan penghapusan dengan konfirmasi.
 

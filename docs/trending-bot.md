@@ -2,16 +2,16 @@
 
 Arsitektur aktif: **Firebase Spark + Gemini API free tier + GitHub Actions standard runner pada repo publik**. Tidak memakai Cloud Functions, Cloud Scheduler, OpenAI, Secret Manager, atau service account yang melewati Firestore Security Rules.
 
-Menu `/admin/bot` memakai layout admin yang sama. Hasil bot selalu **draf**, dibuka melalui `/admin?post=ID`, diedit di Tiptap, lalu dipublikasikan oleh admin. Artikel manual dan URL publik lama tetap bekerja.
+Menu `/admin/bot` memakai layout admin yang sama. Bot mendukung **draf** dan **publikasi otomatis** yang harus diaktifkan oleh admin. Artikel tetap dapat dibuka melalui `/admin?post=ID` dan diedit di Tiptap. Mode otomatis membuat artikel baru langsung berstatus `published`; draf lama tidak diterbitkan massal. Artikel manual dan URL publik lama tetap bekerja.
 
 ## Alur dan default
 
 1. Admin menyimpan pengaturan langsung ke Firestore. Rules memvalidasi keanggotaan admin, revisi, kategori, wilayah, hari, waktu, sumber dan batas artikel.
 2. “Jalankan Sekarang” menambahkan satu permintaan ke `portfolioBotRequests/{uid}`, lalu memanggil endpoint server `/api/bot/dispatch` untuk memicu workflow langsung. Permintaan yang masih menunggu tidak ditimpa atau digandakan. Tidak ada token GitHub atau key AI di browser.
 3. Workflow `.github/workflows/trending-bot.yml` berjalan sekitar setiap 15 menit (`05/20/35/50` setiap jam UTC). Runner memproses antrean dan membaca jadwal Firestore saat berjalan. Mengubah jadwal tidak memerlukan deploy ulang.
-4. Sumber yang memenuhi syarat dikirim ke Gemini. Hasil terstruktur divalidasi dan disimpan sebagai draf. Riwayat mencatat dibuat/dilewati/gagal, alasan, dan tautan editor.
+4. Sumber yang memenuhi syarat dikirim ke Gemini. Hasil terstruktur divalidasi, lalu disimpan sebagai draf atau diterbitkan sesuai pengaturan admin. Riwayat mencatat dibuat/dilewati/gagal, alasan, dan tautan editor.
 
-Default **nonaktif**, Indonesia, 24 jam, AI/teknologi/pemrograman, satu draf setiap hari pukul **08.00 WIB** (`Asia/Jakarta`). Pengecekan pertama biasanya sekitar 08.05 WIB. Jadwal harian memiliki jendela susulan 60 menit dan paling banyak tiga percobaan gagal per tanggal WIB. Manual tetap tersedia ketika jadwal nonaktif. Batas 1–3 draf per eksekusi juga membatasi panggilan penulisan AI.
+Default instalasi **nonaktif**, publikasi otomatis nonaktif, Global, semua kategori, 24 jam, target dua artikel per hari mulai **08.00 WIB** (`Asia/Jakarta`), maksimum dua artikel per eksekusi. Pada ADENA, admin telah meminta aktivasi publikasi otomatis dan target dua artikel per hari. Mode otomatis mendapat satu kesempatan pencarian baru setiap jam dari waktu mulai hingga 23.59 WIB, termasuk setelah hasil kosong atau baru satu artikel terbit. Satu kegagalan pada slot jam yang sama tidak memutar ulang panggilan AI; percobaan dilanjutkan pada jam berikutnya. Mode draf lama mempertahankan slot harian 60 menit dan maksimal tiga percobaan gagal. Manual berbagi kuota harian saat publikasi otomatis aktif; saat nonaktif hasil manual tetap draf. Batas 1–3 artikel per eksekusi tetap membatasi panggilan penulisan AI.
 
 **Manual memicu runner langsung jika endpoint dikonfigurasi.** GitHub tetap membutuhkan waktu untuk menyediakan runner dan membaca sumber; artikel tidak dihasilkan di browser. Halaman boleh ditutup setelah antrean tersimpan. Jika pemicu gagal, antrean tetap diproses oleh cron sekitar setiap 15 menit dan UI memberi tautan Run workflow sebagai alternatif. GitHub dapat menunda/menggugurkan cron saat sibuk serta menonaktifkan jadwal repo publik setelah 60 hari tanpa aktivitas; aktifkan kembali lewat GitHub Actions bila diperlukan. Tidak ada commit buatan untuk menyiasati aturan tersebut.
 
@@ -59,7 +59,7 @@ Kode/workflow dan rules dalam repo perlu dipublikasikan sebelum bot dapat dipaka
 
    Workflow tetap melewati job sampai variable `TRENDING_BOT_CONFIGURED` bernilai `true`. Pengaturan jadwal di Firestore tetap default nonaktif; script tidak mengaktifkannya. Tidak ada setup billing, IAM service account, API Cloud Functions atau pembayaran.
 
-5. Jalankan **Actions → Bot Artikel Trending → Run workflow** untuk pengecekan awal. Di admin akan terlihat waktu runner terakhir terhubung. Klik “Jalankan Sekarang”; jika pemicu langsung tersedia, workflow mulai tanpa menunggu cron. Tombol “Mulai runner sekarang” dapat memicu antrean yang sudah tersimpan. Tinjau draf dan sumber sebelum mengaktifkan jadwal harian.
+5. Jalankan **Actions → Bot Artikel Trending → Run workflow** untuk pengecekan awal. Di admin akan terlihat waktu runner terakhir terhubung. Klik “Jalankan Sekarang”; jika pemicu langsung tersedia, workflow mulai tanpa menunggu cron. Tombol “Mulai runner sekarang” dapat memicu antrean yang sudah tersimpan. Aktifkan jadwal dan opsi publikasi otomatis jika ingin hasil langsung tampil di blog; matikan opsi publikasi otomatis untuk kembali meninjau draf.
 
 Jika memakai project/repo lain, sesuaikan konstanta pada script setup, URL Actions pada halaman admin, dan baseline rules yang telah ditinjau. Jangan menggunakan password admin manusia sebagai password runner.
 
@@ -68,8 +68,8 @@ Jika memakai project/repo lain, sesuaikan konstanta pada script setup, URL Actio
 Akun bot login dengan Firebase Authentication biasa dan **tetap tunduk pada Security Rules**. Tidak memakai Firebase Admin SDK di runtime. Password hanya ada di GitHub Secrets.
 
 - Bot boleh membaca data blog, termasuk draf manual untuk mencegah duplikat, dan menulis log/lease/riwayat/heartbeat bot.
-- Bot hanya dapat **membuat artikel baru** dengan ID `bot_<hash>`, status `draft`, `publishedAt: null`, penulis admin yang valid, timestamp server, dan provenance worker.
-- Bot tidak dapat menerbitkan, mengubah, atau menghapus artikel; tidak dapat mengubah pengaturan, memberi peran admin/worker, atau mengakses collection BTC/lainnya.
+- Bot hanya dapat **membuat artikel baru** dengan ID `bot_<hash>`, status `draft` atau, hanya jika admin mengaktifkannya, `published` dengan timestamp server dan provenance worker. Publikasi otomatis wajib menulis artikel dan ledger `portfolioBotDaily/{tanggal-WIB}` dalam transaksi yang sama. Rules membatasi ledger sesuai `dailyTarget`, tanggal server WIB, ID baru, dan penambahan tepat satu artikel.
+- Bot tidak dapat mengubah atau menghapus artikel lama, menerbitkan draf lama, mereset ledger, atau melampaui target harian; tidak dapat mengubah pengaturan, memberi peran admin/worker, atau mengakses collection BTC/lainnya.
 - Admin dapat mengubah pengaturan yang tervalidasi, menambahkan antrean untuk UID-nya sendiri, membaca hasil, serta mengedit dan menerbitkan artikel. Provenance bot dipertahankan.
 - Pengunjung tidak dapat membaca draf, antrean, pengaturan, status atau log bot.
 
@@ -79,7 +79,7 @@ Rules baru perlu diterapkan di production; kode frontend saja tidak memperbaiki 
 
 [Google Trends API](https://developers.google.com/search/apis/trends) masih memerlukan penerimaan alpha; implementasi memakai **konsensus RSS**, bukan volume pencarian atau peringkat tren Google.
 
-Katalog server: ANTARA Tekno (`https://www.antaranews.com/rss/tekno.xml`), CNN Indonesia (`https://www.cnnindonesia.com/teknologi/rss`), CNBC Indonesia (`https://www.cnbcindonesia.com/tech/rss`), TechCrunch (`https://techcrunch.com/feed/`) dan The Verge (`https://www.theverge.com/rss/index.xml`). Seluruh endpoint merespons HTTP 200 saat dicek. Beberapa feed alternatif memberi 403/404 dan tidak digunakan.
+Katalog teknologi server: ANTARA Tekno (`https://www.antaranews.com/rss/tekno.xml`), CNN Indonesia (`https://www.cnnindonesia.com/teknologi/rss`), CNBC Indonesia (`https://www.cnbcindonesia.com/tech/rss`), TechCrunch (`https://techcrunch.com/feed/`) dan The Verge (`https://www.theverge.com/rss/index.xml`). Seluruh endpoint merespons HTTP 200 saat dicek. Beberapa feed alternatif memberi 403/404 dan tidak digunakan.
 
 Respons HTTP 200 belum menjamin feed masih baru. Log kini mencatat jumlah entri dalam rentang waktu dan tanggal terbaru. Bila feed ANTARA Tekno tertinggal atau gagal, bot juga memeriksa RSS Terkini resmi ANTARA (`https://www.antaranews.com/rss/terkini.xml`), lalu menerapkan kategori dan wilayah yang sama. Sumber cadangan tetap satu grup ANTARA, sehingga tidak dihitung sebagai penerbit independen tambahan. Filter Indonesia bisa sah menghasilkan nol draf jika hanya grup CNN/CNBC yang mempunyai liputan baru; Global memperluas sumber liputan, sementara bahasa penulisan tetap Indonesia.
 
@@ -93,7 +93,7 @@ Gangguan sementara Gemini HTTP 500/502/503/504 dicoba paling banyak tiga kali pe
 
 Riwayat topik/URL permanen, ID artikel deterministik, lease global, dan transaksi atomik mencegah pengulangan serta konflik manual/jadwal. Jika proses berhenti setelah draf committed, retry mempertahankan draf itu. Kemiripan judul adalah heuristik; kejadian dengan judul sangat berbeda tetap perlu ditinjau. Arsip blog/riwayat dibaca bertahap 200 dokumen, sehingga penggunaan Firestore bertambah mengikuti arsip.
 
-Field artikel lama tetap dipakai, dengan tambahan opsional `slug`, `metaDescription`, `sources`, dan `bot`. Isi tetap `tiptap:v1:`. Collection bot: `portfolioBotSettings`, `portfolioBotRequests`, `portfolioBotRuns`, `portfolioBotLocks`, `portfolioBotTopics`, `portfolioBotStatus`, `portfolioBotWorkers`.
+Field artikel lama tetap dipakai, dengan tambahan opsional `slug`, `metaDescription`, `sources`, dan `bot`. Isi tetap `tiptap:v1:`. Collection bot: `portfolioBotSettings`, `portfolioBotRequests`, `portfolioBotRuns`, `portfolioBotLocks`, `portfolioBotTopics`, `portfolioBotStatus`, `portfolioBotWorkers`, `portfolioBotDaily`. Pengaturan baru `autoPublish` dan `dailyTarget` opsional untuk data lama; tidak adanya `autoPublish` berarti draf. Artikel manual dan status artikel lama tetap utuh.
 
 ## Development dan verifikasi
 
@@ -124,3 +124,14 @@ npm.cmd run build
 Test bot menggunakan project terisolasi `demo-portfolio-bot-tests`; rules tests memakai `demo-portfolio-blog`. Data masing-masing demo dihapus sebelum kasus. Jangan mengarahkan env test ke production. Tanpa emulator, kasus integrasi dilewati; unit parser/AI/settings tetap berjalan.
 
 Verifikasi mencakup Gemini request/schema/429, jadwal dinamis, filter dan consensus, sumber gagal, duplikat, retry, crash recovery, worker yang kehilangan izin, batas penulisan, antrean dan heartbeat, rules admin/worker/pengunjung, pembuatan manual, editor, dan publikasi. AI sungguhan serta workflow online baru dapat diverifikasi setelah secret, rules dan kode dipasang. Tidak ada artikel uji yang dibuat di production saat implementasi.
+
+## Publikasi otomatis harian
+
+- Admin memilih **Semua kategori**, Global, target **2 artikel per hari**, maksimum **2 per eksekusi**, mulai **08.00 WIB**, seluruh hari. Aktifkan kedua opsi jadwal dan publikasi otomatis.
+- Katalog diperluas dengan ANTARA Terkini, CNN Indonesia Berita (nasional, ekonomi, internasional, olahraga, hiburan dan gaya hidup), serta CNBC News/Market. Semua URL tetap ditetapkan di server. CNN/CNBC tetap satu grup dan feed tambahan ANTARA tetap satu grup. Feed yang diblokir, tidak valid, atau basi tidak dijadikan bahan berita baru.
+- Parser membaca `.post-content` ANTARA sebelum container generik. Jika satu halaman dalam grup penerbit gagal, halaman lain dari penerbit yang sama masih dapat dicoba. Harus ada bahan terbaca dari dua grup penerbit sebelum AI dipanggil. Tidak ada pelonggaran syarat sumber demi mengejar angka.
+- Ledger WIB mencatat ID artikel yang benar-benar berhasil terbit, bersamaan dengan artikel dan riwayat topik secara atomik. Target merupakan kuota bersama manual/jadwal. Menghapus atau menarik artikel tidak mereset kuota hari itu. Pergantian tanggal menggunakan Asia/Jakarta, bukan UTC; panel admin mengganti subscription saat tanggal WIB berubah.
+- Hasil menampilkan **Terbit otomatis**, tautan publik dan tautan editor. Ringkasan hari ini berasal dari ledger aktual, bukan jumlah permintaan ataupun pengaturan yang belum disimpan. Error Gemini tampil dalam hasil singkat.
+- Target harian tidak menjamin ketersediaan sumber, kuota Gemini atau ketepatan waktu GitHub Actions. Bila belum cukup, bot mencari lagi per jam sampai akhir hari; hasil tanpa sumber tidak diterbitkan. Jadwal GitHub tetap best effort dan dapat terlambat.
+
+Verifikasi 27 November 2026: emulator menguji publikasi dua artikel, konflik manual/jadwal, kuota dan reset tanggal WIB, susulan setelah kosong/sebagian, pencabutan izin selama generasi, akses publik/draf privat, serta penolakan ledger palsu/rollback/kelebihan target. Browser menguji penyimpanan pengaturan, antrean manual melalui CLI worker terautentikasi, kedua tautan publik, eksekusi ulang ketika target sudah tercapai, dan layout 390/768/1440. Fixture hanya dapat dipakai pada project demo dengan kedua emulator loopback; tidak dipasang pada workflow production.
