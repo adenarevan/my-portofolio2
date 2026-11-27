@@ -24,6 +24,7 @@ export function normalizeArticleImage(input) {
 }
 
 export function defaultArticleImage(post = {}) {
+  if (Array.isArray(post.bot?.imageUrls) && !post.bot.imageUrls.length) return null;
   const topic = `${post.title || ''} ${post.tag || ''} ${post.excerpt || ''}`;
   if (/\b(spacex|satelit|satellite|orbit|antariksa|space|nasa|roket|astronaut)\b/i.test(topic)) return ARTICLE_IMAGES[0];
   return ARTICLE_IMAGES[/\b(ai|kecerdasan|teknologi|technology|chip|pusat data|data center|superkomputer|server|komputasi)\b/i.test(topic) ? 1 : 2];

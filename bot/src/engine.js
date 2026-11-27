@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from './store.js';
 import { collectCandidates, readableSources, hash, sameTopic, titleTokens, noCandidateMessage } from './sources.js';
 import { DEFAULT_BOT_SETTINGS, jakartaDay, scheduledSlot, validateSettings } from './botConfig.js';
 import { articleToPost } from './writer.js';
+import { findArticleImages } from './images.js';
 
 export const BOT_COLLECTIONS = { settings: 'portfolioBotSettings', runs: 'portfolioBotRuns', locks: 'portfolioBotLocks', topics: 'portfolioBotTopics', requests: 'portfolioBotRequests', status: 'portfolioBotStatus', daily: 'portfolioBotDaily' };
 const committed = item => ['created', 'published'].includes(item.status);
@@ -22,7 +23,7 @@ export async function updateBotSettings(db, uid, input, revision) {
   });
 }
 
-export function createBotRunner({ db, workerId, generate, collect = collectCandidates, readSources = readableSources, now = () => new Date(), model = 'gemini-3.1-flash-lite' }) {
+export function createBotRunner({ db, workerId, generate, collect = collectCandidates, readSources = readableSources, findImages = findArticleImages, now = () => new Date(), model = 'gemini-3.1-flash-lite' }) {
   return async function runBot({ trigger, uid, requestId }) {
     if (!workerId || (await db.collection('portfolioBotWorkers').doc(workerId).get()).data()?.enabled !== true) throw new Error('Akun runner belum diberi izin bot.');
     if (trigger === 'manual') await requireAdmin(db, uid);
@@ -71,10 +72,11 @@ export function createBotRunner({ db, workerId, generate, collect = collectCandi
       };
       const discovery = await collect(settings, diagnostics, started, undefined, cache); stats = discovery.stats;
       const [historySnapshot, postsSnapshot] = await Promise.all([
-        db.collection(BOT_COLLECTIONS.topics).get(), db.collection('portfolioPosts').select('title', 'slug', 'sources').get(),
+        db.collection(BOT_COLLECTIONS.topics).get(), db.collection('portfolioPosts').select('title', 'slug', 'sources', 'bot.imageUrls').get(),
       ]);
       const history = historySnapshot.docs.map(doc => doc.data());
       const posts = postsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      const usedImages = new Set(posts.flatMap(post => post.bot?.imageUrls || []));
       const usedUrls = new Set([...history.flatMap(topic => topic.urls || []), ...posts.flatMap(post => (post.sources || []).map(source => source.url))]);
       let created = acquired.carried.length; let attempted = 0; let generated = 0;
       const capacity = autoPublish ? Math.min(settings.maxArticles, settings.dailyTarget - dailyIds.length + acquired.carried.length) : settings.maxArticles;
@@ -93,7 +95,8 @@ export function createBotRunner({ db, workerId, generate, collect = collectCandi
           generated++;
           const article = await generate({ ...candidate, reason }, sources);
           if (posts.some(post => post.slug === article.slug || sameTopic(titleTokens(post.title), titleTokens(article.title)))) { items.push({ status: 'skipped', title: candidate.title, reason: 'Judul atau slug hasil AI sudah ada.' }); continue; }
-          const data = articleToPost(article, sources, candidate.categories[0]);
+          const images = await findImages(article, diagnostics, { used: usedImages });
+          const data = articleToPost(article, sources, candidate.categories[0], images);
           if (autoPublish) { data.status = 'published'; data.publishedAt = FieldValue.serverTimestamp(); }
           const topicKey = hash(candidate.tokens.join('|')); const postId = `bot_${topicKey}`;
           const topicRef = db.collection(BOT_COLLECTIONS.topics).doc(topicKey);
@@ -111,13 +114,13 @@ export function createBotRunner({ db, workerId, generate, collect = collectCandi
               tx.set(dailyRef, { postIds: [...ids, postId], updatedAt: FieldValue.serverTimestamp() });
             }
             if (topic.exists || existing.exists) throw new Error('Draf topik ini sudah ada; tidak dibuat ulang.');
-            tx.create(postRef, { ...data, authorId, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), bot: { runId, topicKey, workerId, selectionReason: reason, provider: 'rss', model, generatedAt: FieldValue.serverTimestamp(), ...(autoPublish ? { publicationDay: day } : {}) } });
+            tx.create(postRef, { ...data, authorId, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), bot: { runId, topicKey, workerId, selectionReason: reason, provider: 'rss', model, imageUrls: images.map(image => image.src), generatedAt: FieldValue.serverTimestamp(), ...(autoPublish ? { publicationDay: day } : {}) } });
             tx.create(topicRef, { tokens: candidate.tokens, urls: sources.map(source => source.url), postId, runId, createdAt: FieldValue.serverTimestamp() });
             if (autoPublish && data.tag) tx.set(db.collection('portfolioBlogTopics').doc('main'), { tags: FieldValue.arrayUnion(data.tag), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
             // Persist result atomically with the draft so a crash still leaves a trace.
             tx.update(runRef, { items: FieldValue.arrayUnion({ status: autoPublish ? 'published' : 'created', title: data.title, postId, reason }) });
           });
-          created++; sources.forEach(source => usedUrls.add(source.url)); history.push({ tokens: candidate.tokens, urls: sources.map(source => source.url), postId }); posts.push({ ...data, id: postId });
+          created++; images.forEach(image => usedImages.add(image.src)); sources.forEach(source => usedUrls.add(source.url)); history.push({ tokens: candidate.tokens, urls: sources.map(source => source.url), postId }); posts.push({ ...data, id: postId });
           items.push({ status: autoPublish ? 'published' : 'created', title: data.title, postId, reason });
         } catch (error) { items.push({ status: 'failed', title: candidate.title, reason: error.message.slice(0, 240) }); }
       }

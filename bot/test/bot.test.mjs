@@ -8,6 +8,7 @@ import { canonicalUrl, parseFeed, selectCandidates, sameTopic, titleTokens, coll
 import { articleToPost, validateArticle, writeArticle } from '../src/writer.js';
 import { BOT_COLLECTIONS, createBotRunner, updateBotSettings } from '../src/engine.js';
 import { processBotTick } from '../src/queue.js';
+import { ARTICLE_IMAGES } from '../../src/lib/articleMedia.js';
 
 const date = new Date('2026-11-26T01:05:00Z');
 const sourceItems = [
@@ -129,10 +130,14 @@ test('AI contract uses server-only structured responses and rejects fabricated s
   assert.deepEqual(generated, article);
   assert.throws(() => validateArticle({ ...article, sections: [{ ...article.sections[0], sourceIds: ['invented'] }, article.sections[1]] }, sourceItems));
   assert.throws(() => validateArticle({ ...article, sections: [{ ...article.sections[0], paragraphs: ['Claim https://invented.example.org/ with a made-up link.'] }, article.sections[1]] }, sourceItems));
-  const post = articleToPost(article, sourceItems, 'ai');
+  const post = articleToPost(article, sourceItems, 'ai', [ARTICLE_IMAGES[1], ARTICLE_IMAGES[0]]);
   assert.equal(post.status, 'draft'); assert.equal(post.publishedAt, null); assert.match(post.body, /^tiptap:v1:/); assert.equal(post.sources.length, 2);
   const image = JSON.parse(post.body.slice('tiptap:v1:'.length)).content[0];
   assert.equal(image.type, 'image'); assert.equal(image.attrs.src, '/blog-media/computing.jpg'); assert.ok(image.attrs.alt); assert.ok(image.attrs.creditUrl.startsWith('https://commons.wikimedia.org/'));
+  const nodes = JSON.parse(post.body.slice('tiptap:v1:'.length)).content;
+  assert.equal(nodes.filter(node => node.type === 'image').length, 2);
+  assert.ok(nodes.findIndex(node => node.type === 'image' && node.attrs.src === ARTICLE_IMAGES[0].src) > 2);
+  assert.equal(JSON.parse(articleToPost(article, sourceItems, 'sports').body.slice('tiptap:v1:'.length)).content.some(node => node.type === 'image'), false);
   await assert.rejects(writeArticle(candidate, sourceItems, { apiKey: 'test', fetchImpl: async () => new Response('no', { status: 429 }) }), /HTTP 429/);
 });
 
@@ -177,6 +182,22 @@ test('Backend denies non-admin settings and execution', { skip: !emulator }, asy
   await assert.rejects(updateBotSettings(adminDb, 'reader', DEFAULT_BOT_SETTINGS, 0));
   await assert.rejects(fixtureRunner()({ ...manual(), uid: 'reader' }), /admin/);
   await assert.rejects(fixtureRunner()({ trigger: 'manual' }), /admin/);
+});
+
+test('Bot saves searched cover and inline images with attribution and remembers used URLs', { skip: !emulator }, async () => {
+  await updateBotSettings(adminDb, 'owner', DEFAULT_BOT_SETTINGS, 0);
+  const photos = [ARTICLE_IMAGES[0], ARTICLE_IMAGES[1]];
+  let invoked = false;
+  const run = fixtureRunner({ findImages: async (_, diagnostics, options) => {
+    invoked = true; assert.ok(options.used instanceof Set);
+    diagnostics.push({ stage: 'image', source: 'Wikimedia Commons', status: 'ok' });
+    return photos;
+  } });
+  const result = await run(manual()); assert.equal(result.status, 'created'); assert.equal(invoked, true);
+  const saved = (await db.collection('portfolioPosts').get()).docs[0].data();
+  const images = JSON.parse(saved.body.slice('tiptap:v1:'.length)).content.filter(node => node.type === 'image');
+  assert.equal(images.length, 2); assert.deepEqual(saved.bot.imageUrls, photos.map(image => image.src));
+  assert.equal(images[1].attrs.credit, photos[1].credit);
 });
 test('Manual and scheduled executions share a lock, create editable drafts, and prevent duplicates', { skip: !emulator }, async () => {
   await updateBotSettings(adminDb, 'owner', { ...DEFAULT_BOT_SETTINGS, enabled: true }, 0);
